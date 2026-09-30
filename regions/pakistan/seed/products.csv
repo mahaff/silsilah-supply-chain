@@ -1,0 +1,7 @@
+id,supply_chain_id,sku,name,category,unit
+PAK-PRD-001,PAK-SC-001,PAK-WATER-1L,Bottled water 1L,Beverages,case
+PAK-PRD-002,PAK-SC-001,PAK-RICE-5KG,Rice 5kg,Staples,bag
+PAK-PRD-003,PAK-SC-001,PAK-OIL-1L,Engine oil 1L,Automotive,bottle
+PAK-PRD-004,PAK-SC-001,PAK-CARTON,Carton boxes,Packaging,bundle
+PAK-PRD-005,PAK-SC-001,PAK-USB,USB cables,Electronics,pack
+PAK-PRD-006,PAK-SC-001,PAK-DETERGENT,Detergent,Household,bottle

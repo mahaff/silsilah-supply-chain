@@ -1,0 +1,5 @@
+id,purchase_order_id,origin,destination,status,departed_on,eta,arrived_on
+PAK-SHP-001,PAK-PO-002,Lahore,Lahore,delivered,2026-08-05,2026-08-12,2026-08-11
+PAK-SHP-002,PAK-PO-001,Karachi,Karachi,delayed,2026-09-10,2026-09-16,
+PAK-SHP-003,PAK-PO-004,Islamabad,Karachi,delayed,2026-09-08,2026-09-19,
+PAK-SHP-004,PAK-PO-005,Lahore,Karachi,planned,,2026-10-08,

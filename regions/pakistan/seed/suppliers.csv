@@ -1,0 +1,5 @@
+id,supply_chain_id,name,city,status,lead_time_days
+PAK-SUP-001,PAK-SC-001,Malir Demo Mills,Karachi,active,7
+PAK-SUP-002,PAK-SC-001,Lahore Demo Packaging,Lahore,active,5
+PAK-SUP-003,PAK-SC-001,Chenab Demo Goods,Faisalabad,active,9
+PAK-SUP-004,PAK-SC-001,Margalla Demo Supply,Islamabad,active,6

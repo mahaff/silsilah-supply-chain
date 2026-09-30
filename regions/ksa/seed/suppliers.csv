@@ -1,0 +1,5 @@
+id,supply_chain_id,name,city,status,lead_time_days
+KSA-SUP-001,KSA-SC-001,Oasis Gate Demo Foods,Riyadh,active,5
+KSA-SUP-002,KSA-SC-001,Gulf Carton Workshop,Dammam,active,8
+KSA-SUP-003,KSA-SC-001,Red Sea Demo Goods,Jeddah,active,6
+KSA-SUP-004,KSA-SC-001,North Dock Demo Imports,Jubail,active,12

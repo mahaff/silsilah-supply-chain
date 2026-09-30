@@ -1,0 +1,161 @@
+# Silsilah
+
+Agentic Supply Chain Intelligence & Governance Platform
+
+Silsilah is a local practice system for looking at one fictional supply chain at a time. MVP 1 lets you choose Saudi Arabia or Pakistan, loads that region's synthetic data into its own SQLite file, and shows suppliers, products, inventory, purchase orders, shipments, and a few metrics.
+
+The numbers come from the database and from short Python rules. No language model is connected. The app does not buy anything, pay anyone, or contact a supplier.
+
+This is not legal advice, and it does not certify compliance. No regulatory text is included.
+
+## What MVP 1 shows
+
+- A region switch for Saudi Arabia (`ksa`) and Pakistan (`pakistan`)
+- One fictional organization and one fictional supply chain in each region
+- Separate SQLite databases
+- Six metrics, each labeled as a database fact or a deterministic rule
+- A governance panel with zero regulatory references
+- A reasoning panel that says no language model is connected
+
+The future hierarchy is already in the data model:
+
+```text
+Region -> Organization -> Supply Chain -> suppliers, products, stock, orders, shipments
+```
+
+MVP 1 stores one organization and one supply chain in each regional file. The screen names all three levels so the shape is visible.
+
+## Synthetic datasets
+
+Company names are fictional. Do not treat them as real businesses.
+
+| | Saudi Arabia | Pakistan |
+| --- | --- | --- |
+| Organization | Wadi Demo Distributors | Ravi Demo Distributors |
+| Supply chain | Riyadh-Jeddah Staples Chain | Karachi-Lahore Staples Chain |
+| Currency | SAR, stored in halalas | PKR, stored in paisas |
+| Suppliers | 4 | 4 |
+| Products | 6 | 6 |
+| Open purchase orders | 3 | 2 |
+| Shipments in transit | 1 | 0 |
+| Delayed shipments | 1 | 2 |
+| Stock lines below reorder point | 2 | 3 |
+
+Low stock means on-hand quantity is **lower than** the reorder point. An equal quantity is not low.
+
+Saudi Arabia lows: Riyadh rice (15 on hand, reorder 30) and Riyadh carton boxes (10 on hand, reorder 25).
+
+Pakistan lows: Karachi bottled water (20 / 50), Karachi detergent (12 / 20), and Lahore USB cables (8 / 10).
+
+Prices on order lines are integers of minor units. One SAR is 100 halalas. One PKR is 100 paisas. The database does not use floating-point money.
+
+## How the two regions stay separate
+
+- `regions/ksa/` and `regions/pakistan/` each have their own config and CSV files.
+- Seeding writes `data/ksa/war_room.sqlite` or `data/pakistan/war_room.sqlite`.
+- The app opens only the file for the region you selected.
+- On read, it checks that the file's stored region code matches the selection. A swapped file is refused.
+- Queries filter on that file's supply chain id.
+
+`data/` is gitignored. The CSV files are the source. Rebuild the databases whenever you want a clean copy.
+
+## Governance
+
+Each region has an empty `governance_references` table and a short note in `regions/<region>/governance/README.md`.
+
+The table is ready for a later research pass that uses official government or regulator sources and records jurisdiction, authority, reference, requirement, applicability, source URL, date verified, implementation status, and a technical control id. MVP 1 does not fill that table and does not guess any legal requirement.
+
+## Language model
+
+`llm/null_provider.py` is the only provider. It returns a fixed note and does not read metric values into that note.
+
+`get_provider()` always returns that null provider. `LLM_ENABLED` and `XAI_API_KEY` are ignored. No model SDK is installed. A later provider can implement `explain(facts)` in `llm/base.py` without changing how metrics are calculated.
+
+## Run it on Windows
+
+Use Python 3.12 and Node.js 22 LTS. Reflex builds its web page with Node, and the first run needs an internet connection to download those frontend tools. After that, the app and the databases stay on your machine.
+
+Open PowerShell in this project folder. If activation is blocked, the execution-policy command below applies only to that window.
+
+```powershell
+py -0p
+node -v
+
+py -3.12 -m venv .venv
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\Activate.ps1
+
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+
+Copy-Item .env.example .env
+python -m persistence.seed
+python -m pytest
+reflex run
+```
+
+Then open [http://127.0.0.1:3217](http://127.0.0.1:3217).
+
+The Reflex backend listens on port 8217. Those ports were chosen so they are less likely to clash with another app on ports 3000 or 8000. If either port is already in use, stop the other program and run `reflex run` again. Leave `.env` without a real API key.
+
+On macOS or Linux, create the virtual environment the same way and activate it with `source .venv/bin/activate`. The `python` and `reflex` commands after activation are the same. There is no `Copy-Item`; use `cp .env.example .env`.
+
+If you skip the seed command, the first page load creates a missing database from the CSV files. It does not rebuild a database that is already there. Run `python -m persistence.seed` when you want a clean reload.
+
+## Tests
+
+`python -m pytest` seeds temporary database files and checks:
+
+- metric rules, including the low-stock comparison
+- the Saudi Arabia and Pakistan counts above
+- one organization and one supply chain per file
+- an empty governance table
+- the null provider does not repeat a calculated number
+- a Pakistan file cannot be opened as Saudi Arabia
+
+## Project layout
+
+```text
+app/                 Reflex pages and screen state
+domain/              Models, evidence labels, and metric rules
+persistence/         Region config, SQLite schema, reads, and seeding
+regions/ksa/         Saudi Arabia config, seed CSVs, governance notes
+regions/pakistan/    Pakistan config, seed CSVs, governance notes
+governance/          Status text for the panel
+llm/                 Provider interface and the null provider
+tests/               Isolation, seed, and metric tests
+data/                Generated SQLite files (not committed)
+reflex.lock/         Frontend package list created by Reflex (kept)
+```
+
+The first `reflex run` also creates a `.web/` folder. That folder is generated output and is gitignored.
+
+These folders are intentionally absent: `ml/`, `agents/`, and `simulation/`. They belong to later phases.
+
+## Decisions worth knowing
+
+- **Region is a separate database.** Organization and supply chain are rows inside that database. That is the Region, then Organization, then Supply Chain hierarchy, with only one organization and one chain seeded.
+- **Operational rows store `supply_chain_id`.** Queries filter on it so a second chain can be added later without mixing records.
+- **Metrics live in `domain/metrics.py`.** The page displays them. It does not reimplement the comparisons.
+- **A straight count is a database fact. A filtered count is a deterministic rule.**
+- **Pandas loads and checks the CSV files.** The metric rules are ordinary Python so each comparison is easy to read.
+- **The governance table is created and left empty.**
+- **Order lines are in the database** even though the page shows order headers. The caption under the order table states how many lines were stored.
+
+## Windows notes
+
+- Use `py -3.12`, not the Microsoft Store stub that only opens the Store.
+- PowerShell may refuse to run `Activate.ps1` until you set the process execution policy, as in the commands above.
+- Install Node.js 22 before `reflex run`. Reflex asks for Node.js 20.19 or newer, and current Reflex also prints a notice if Node is older than 22.22. Node 22.14 still starts the app. The first run may also download Bun.
+- Keep the project in a short local path such as `C:\dev\silsilah`, not in OneDrive, Desktop, or Documents. Those folders can lock SQLite and slow the Reflex frontend folder.
+- Avoid spaces in the project path.
+- Stop `reflex run` before running `python -m persistence.seed` if Windows reports that the database file is locked.
+- Seed files are plain English ASCII so a console code page does not corrupt them.
+
+## What is not installed
+
+scikit-learn, Plotly, LangGraph, an xAI or other model SDK, Ollama, PostgreSQL, Redis, and Docker are not required for MVP 1. Do not add them until a later phase actually uses them.
+
+## What this version will not do
+
+It will not place orders, send messages, approve an action, simulate a recovery step, predict risk with a model, or describe a law. Those steps are later work and need their own review.

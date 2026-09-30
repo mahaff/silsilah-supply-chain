@@ -1,0 +1,11 @@
+# Pakistan regional edition.
+# This config points at synthetic files only. It is not a legal or customs profile.
+
+region_code = "pakistan"
+display_name = "Pakistan"
+currency = "PKR"
+minor_unit_name = "paisa"
+timezone = "Asia/Karachi"
+database_file = "data/pakistan/war_room.sqlite"
+seed_dir = "regions/pakistan/seed"
+synthetic = true

@@ -1,0 +1,11 @@
+# Saudi Arabia regional edition.
+# This config points at synthetic files only. It is not a legal or customs profile.
+
+region_code = "ksa"
+display_name = "Saudi Arabia"
+currency = "SAR"
+minor_unit_name = "halalah"
+timezone = "Asia/Riyadh"
+database_file = "data/ksa/war_room.sqlite"
+seed_dir = "regions/ksa/seed"
+synthetic = true

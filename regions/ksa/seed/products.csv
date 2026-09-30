@@ -1,0 +1,7 @@
+id,supply_chain_id,sku,name,category,unit
+KSA-PRD-001,KSA-SC-001,KSA-WATER-1L,Bottled water 1L,Beverages,case
+KSA-PRD-002,KSA-SC-001,KSA-RICE-5KG,Rice 5kg,Staples,bag
+KSA-PRD-003,KSA-SC-001,KSA-OIL-1L,Engine oil 1L,Automotive,bottle
+KSA-PRD-004,KSA-SC-001,KSA-CARTON,Carton boxes,Packaging,bundle
+KSA-PRD-005,KSA-SC-001,KSA-USB,USB cables,Electronics,pack
+KSA-PRD-006,KSA-SC-001,KSA-DETERGENT,Detergent,Household,bottle

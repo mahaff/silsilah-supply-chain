@@ -1,0 +1,9 @@
+# Direct packages for Silsilah MVP 1.
+# SQLite is part of Python, so it is not listed here.
+# Do not add scikit-learn, Plotly, LangGraph, or an LLM SDK for this MVP.
+
+reflex==0.9.12
+pandas==3.0.6
+pydantic==2.13.5
+python-dotenv==1.2.3
+pytest==9.1.1

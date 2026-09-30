@@ -1,0 +1,5 @@
+id,purchase_order_id,origin,destination,status,departed_on,eta,arrived_on
+KSA-SHP-001,KSA-PO-004,Jubail,Jeddah,delivered,2026-07-10,2026-07-20,2026-07-18
+KSA-SHP-002,KSA-PO-003,Jeddah,Jeddah,in_transit,2026-09-20,2026-09-30,
+KSA-SHP-003,KSA-PO-002,Dammam,Riyadh,delayed,2026-09-16,2026-09-22,
+KSA-SHP-004,KSA-PO-005,Riyadh,Jeddah,planned,,2026-10-06,
