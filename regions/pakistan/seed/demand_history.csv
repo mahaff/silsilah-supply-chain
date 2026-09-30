@@ -1,0 +1,3 @@
+id,supply_chain_id,warehouse_id,product_id,period_start,period_end,quantity_issued
+PAK-DEM-001,PAK-SC-001,PAK-WH-001,PAK-PRD-001,2026-08-01,2026-08-14,14
+PAK-DEM-002,PAK-SC-001,PAK-WH-001,PAK-PRD-001,2026-08-15,2026-08-28,14

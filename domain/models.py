@@ -109,6 +109,8 @@ class InventoryRow(BaseModel):
 
     id: str
     supply_chain_id: str
+    warehouse_id: str
+    product_id: str
     warehouse_name: str
     sku: str
     product_name: str
@@ -183,6 +185,25 @@ class AuditEvent(BaseModel):
     action: str
     evidence_kind: str
     summary: str
+    risk_id: str | None = None
+    rule_id: str | None = None
+
+
+class DemandPeriod(BaseModel):
+    """Synthetic quantity issued for one product at one warehouse.
+
+    This is not a forecast. Coverage math uses only these stored periods.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    supply_chain_id: str
+    warehouse_id: str
+    product_id: str
+    period_start: str
+    period_end: str
+    quantity_issued: int = Field(gt=0)
 
 
 class RegionScope(BaseModel):

@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import reflex as rx
 
+from datetime import datetime, timezone
+
 from domain.evidence import evidence_label
 from domain.metrics import build_metrics
 from domain.models import status_label
+from domain.risks import Risk, count_open
 from governance.status import build_governance_status
 from llm.base import FactPacket
 from llm.null_provider import get_provider
@@ -46,6 +49,25 @@ class WarRoomState(rx.State):
     reasoning_note: str = ""
     reasoning_provider: str = "null"
 
+    dataset_as_of: str = ""
+    open_risk_count: str = "0"
+    inventory_risk_count: str = "0"
+    shipment_risk_count: str = "0"
+    supplier_risk_count: str = "0"
+    attention_risk_count: str = "0"
+    watch_risk_count: str = "0"
+    risks: list[dict[str, str]] = []
+    supplier_indicators: list[dict[str, str]] = []
+    selected_risk_id: str = ""
+    selected_title: str = ""
+    selected_explanation: str = ""
+    selected_rule_id: str = ""
+    selected_severity_reason: str = ""
+    selected_entities: str = ""
+    selected_evidence: str = ""
+    selected_status: str = ""
+    selected_rereview: str = ""
+
     def load_region(self):
         """Load whichever region is already selected. Used when the page opens."""
         yield from self._reload()
@@ -53,7 +75,30 @@ class WarRoomState(rx.State):
     def select_region(self, region_code: str):
         """Switch edition and load that database only."""
         self.region_code = region_code
+        self.selected_risk_id = ""
         yield from self._reload()
+
+    def select_risk(self, risk_id: str):
+        """Show the evidence for one risk from the register already on screen."""
+        self.selected_risk_id = risk_id
+        match = next((row for row in self.risks if row["id"] == risk_id), None)
+        if match is None:
+            self._clear_risk_detail()
+            return
+        self.selected_title = match["title"]
+        self.selected_explanation = match["explanation"]
+        self.selected_rule_id = match["rule_id"]
+        self.selected_severity_reason = match["severity_reason"]
+        self.selected_entities = match["entities"]
+        self.selected_evidence = match["evidence"]
+        self.selected_status = match["status_label"]
+        self.selected_rereview = match["re_review_note"]
+
+    def mark_reviewed(self):
+        self._set_risk_status("reviewed")
+
+    def mark_resolved(self):
+        self._set_risk_status("resolved")
 
     def _reload(self):
         # Yield once so the screen can show the loading line before SQLite work finishes.
@@ -90,6 +135,8 @@ class WarRoomState(rx.State):
             repository.governance_reference_count(),
             repository.latest_audit_event(),
         )
+        risks, indicators = repository.load_risks(now=_utc_now())
+        counts = count_open(risks)
         note = get_provider().explain(
             FactPacket(
                 region_code=scope.organization.region_code.value,
@@ -177,6 +224,69 @@ class WarRoomState(rx.State):
         self.audit_at = governance.latest_audit_at
         self.reasoning_note = note.text
         self.reasoning_provider = note.provider_name
+        self.dataset_as_of = repository.dataset_as_of()
+        self.open_risk_count = str(counts["open"])
+        self.inventory_risk_count = str(counts["inventory"])
+        self.shipment_risk_count = str(counts["shipment"])
+        self.supplier_risk_count = str(counts["supplier"])
+        self.attention_risk_count = str(counts["attention"])
+        self.watch_risk_count = str(counts["watch"])
+        self.risks = [_risk_row(risk) for risk in risks]
+        self.supplier_indicators = [
+            {
+                "supplier_name": indicator.supplier_name,
+                "delayed_shipment_count": str(indicator.delayed_shipment_count),
+                "linked_shipment_count": str(indicator.linked_shipment_count),
+                "delay_proportion_text": indicator.delay_proportion_text,
+                "order_share_text": indicator.order_share_text,
+                "note": indicator.note,
+            }
+            for indicator in indicators
+        ]
+        self._remember_risk_detail(risks)
+
+    def _set_risk_status(self, status: str):
+        if not self.selected_risk_id:
+            self.error_message = "Select a risk in the register before updating its status."
+            return
+        try:
+            repository = RegionRepository(self.region_code)
+            repository.set_risk_status(self.selected_risk_id, status, now=_utc_now())
+            self.error_message = ""
+        except Exception as exc:
+            self.error_message = f"The status was not changed. {exc}"
+            return
+        self._fill_from_database()
+
+    def _remember_risk_detail(self, risks: list[Risk]) -> None:
+        if not self.selected_risk_id:
+            self._clear_risk_detail()
+            return
+        match = next((risk for risk in risks if risk.id == self.selected_risk_id), None)
+        if match is None:
+            self.selected_risk_id = ""
+            self._clear_risk_detail()
+            return
+        self.selected_title = match.title
+        self.selected_explanation = match.explanation
+        self.selected_rule_id = match.rule_id
+        self.selected_severity_reason = match.severity_reason
+        self.selected_entities = ", ".join(match.entity_ids)
+        self.selected_evidence = "\n".join(match.evidence_lines)
+        self.selected_status = {"open": "Open", "reviewed": "Reviewed", "resolved": "Resolved"}.get(
+            match.status, match.status
+        )
+        self.selected_rereview = match.re_review_note
+
+    def _clear_risk_detail(self) -> None:
+        self.selected_title = ""
+        self.selected_explanation = ""
+        self.selected_rule_id = ""
+        self.selected_severity_reason = ""
+        self.selected_entities = ""
+        self.selected_evidence = ""
+        self.selected_status = ""
+        self.selected_rereview = ""
 
     def _clear_display(self) -> None:
         self.region_display_name = ""
@@ -198,3 +308,42 @@ class WarRoomState(rx.State):
         self.audit_summary = ""
         self.audit_at = ""
         self.reasoning_note = ""
+        self.dataset_as_of = ""
+        self.open_risk_count = "0"
+        self.inventory_risk_count = "0"
+        self.shipment_risk_count = "0"
+        self.supplier_risk_count = "0"
+        self.attention_risk_count = "0"
+        self.watch_risk_count = "0"
+        self.risks = []
+        self.supplier_indicators = []
+        self.selected_risk_id = ""
+        self._clear_risk_detail()
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def _risk_row(risk: Risk) -> dict[str, str]:
+    category_labels = {
+        "inventory": "Inventory",
+        "shipment": "Shipment",
+        "supplier": "Supplier",
+    }
+    severity_labels = {"attention": "Attention", "watch": "Watch"}
+    status_labels = {"open": "Open", "reviewed": "Reviewed", "resolved": "Resolved"}
+    return {
+        "id": risk.id,
+        "category_label": category_labels.get(risk.category, risk.category),
+        "severity_label": severity_labels.get(risk.severity, risk.severity),
+        "status_label": status_labels.get(risk.status, risk.status),
+        "title": risk.title,
+        "re_review": "Yes" if risk.re_review_note else "No",
+        "explanation": risk.explanation,
+        "rule_id": risk.rule_id,
+        "severity_reason": risk.severity_reason,
+        "entities": ", ".join(risk.entity_ids),
+        "evidence": "\n".join(risk.evidence_lines),
+        "re_review_note": risk.re_review_note,
+    }

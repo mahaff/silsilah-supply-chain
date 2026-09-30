@@ -9,8 +9,10 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
+from domain.evidence import EvidenceKind
 from domain.models import (
     AuditEvent,
+    DemandPeriod,
     InventoryRow,
     Organization,
     Product,
@@ -22,6 +24,15 @@ from domain.models import (
     Supplier,
     SupplyChain,
     Warehouse,
+)
+from domain.risks import (
+    DATASET_AS_OF_DATE,
+    Risk,
+    RiskStatus,
+    StoredReview,
+    SupplierIndicator,
+    detect_risks,
+    reconcile_reviews,
 )
 from persistence.connection import connect, load_region_config
 
@@ -152,6 +163,8 @@ class RegionRepository:
                 SELECT
                     i.id,
                     i.supply_chain_id,
+                    i.warehouse_id,
+                    i.product_id,
                     w.name AS warehouse_name,
                     p.sku,
                     p.name AS product_name,
@@ -256,7 +269,8 @@ class RegionRepository:
         with self._session() as connection:
             row = connection.execute(
                 """
-                SELECT id, occurred_at, actor, action, evidence_kind, summary
+                SELECT id, occurred_at, actor, action, evidence_kind, summary,
+                       risk_id, rule_id
                 FROM audit_events
                 ORDER BY id DESC
                 LIMIT 1
@@ -265,3 +279,224 @@ class RegionRepository:
         if row is None:
             return None
         return AuditEvent.model_validate(dict(row))
+
+    def dataset_as_of(self) -> str:
+        """Return the synthetic dataset date, never the computer clock."""
+        with self._session() as connection:
+            row = connection.execute(
+                "SELECT value FROM app_meta WHERE key = 'dataset_as_of'"
+            ).fetchone()
+        stored = None if row is None else row["value"]
+        expected = DATASET_AS_OF_DATE.isoformat()
+        if stored != expected:
+            raise ValueError(
+                "This database has no matching synthetic dataset as-of date "
+                f"({expected}). Reseed with: python -m persistence.seed. "
+                "Overdue checks do not use today's date."
+            )
+        return stored
+
+    def list_demand(self, supply_chain_id: str) -> list[DemandPeriod]:
+        with self._session() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, supply_chain_id, warehouse_id, product_id,
+                       period_start, period_end, quantity_issued
+                FROM demand_history
+                WHERE supply_chain_id = ?
+                ORDER BY id
+                """,
+                (supply_chain_id,),
+            ).fetchall()
+        return [DemandPeriod.model_validate(dict(row)) for row in rows]
+
+    def list_reviews(self) -> dict[str, StoredReview]:
+        with self._session() as connection:
+            rows = connection.execute(
+                """
+                SELECT risk_id, status, evidence_fingerprint, actor, updated_at,
+                       re_review_required, re_review_note
+                FROM risk_reviews
+                ORDER BY risk_id
+                """
+            ).fetchall()
+        reviews: dict[str, StoredReview] = {}
+        for row in rows:
+            review = StoredReview(
+                risk_id=row["risk_id"],
+                status=row["status"],
+                evidence_fingerprint=row["evidence_fingerprint"],
+                actor=row["actor"],
+                updated_at=row["updated_at"],
+                re_review_required=bool(row["re_review_required"]),
+                re_review_note=row["re_review_note"],
+            )
+            reviews[review.risk_id] = review
+        return reviews
+
+    def list_audit_events(self) -> list[AuditEvent]:
+        with self._session() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, occurred_at, actor, action, evidence_kind, summary,
+                       risk_id, rule_id
+                FROM audit_events
+                ORDER BY id
+                """
+            ).fetchall()
+        return [AuditEvent.model_validate(dict(row)) for row in rows]
+
+    def detected_inputs(self) -> tuple[str, list[Risk], list[SupplierIndicator]]:
+        """Load this region's rows and run the deterministic rules."""
+        scope = self.load_scope()
+        as_of = self.dataset_as_of()
+        chain_id = scope.supply_chain.id
+        risks, indicators = detect_risks(
+            region_code=self.config.region_code,
+            inventory=self.list_inventory(chain_id),
+            periods=self.list_demand(chain_id),
+            shipments=self.list_shipments(chain_id),
+            orders=self.list_purchase_orders(chain_id),
+            suppliers=self.list_suppliers(chain_id),
+            as_of=DATASET_AS_OF_DATE,
+        )
+        if as_of != DATASET_AS_OF_DATE.isoformat():
+            raise ValueError("Dataset as-of date mismatch.")
+        return scope.display_name, risks, indicators
+
+    def load_risks(self, *, now: str) -> tuple[list[Risk], list[SupplierIndicator]]:
+        """Recalculate risks and keep a review only when its evidence still matches."""
+        _display_name, risks, indicators = self.detected_inputs()
+        reconciled, updates = reconcile_reviews(risks, self.list_reviews())
+        if updates:
+            self._write_review_updates(updates, now=now)
+        return reconciled, indicators
+
+    def set_risk_status(self, risk_id: str, status: str, *, now: str) -> Risk:
+        """Record a local user's review. Evidence rows are not deleted."""
+        allowed = {RiskStatus.OPEN, RiskStatus.REVIEWED, RiskStatus.RESOLVED}
+        if status not in allowed:
+            raise ValueError("Status must be open, reviewed, or resolved.")
+        new_status = status
+        _display_name, risks, _indicators = self.detected_inputs()
+        reconciled, updates = reconcile_reviews(risks, self.list_reviews())
+        if updates:
+            self._write_review_updates(updates, now=now)
+        match = next((risk for risk in reconciled if risk.id == risk_id), None)
+        if match is None:
+            raise ValueError("That risk is not produced by this region's current rules.")
+        if match.status == new_status and match.re_review_note == "":
+            raise ValueError(f"This risk is already marked {new_status}.")
+        self._save_review(
+            risk=match,
+            status=new_status,
+            now=now,
+            actor="local_user",
+            re_review_required=False,
+            re_review_note="",
+        )
+        self._insert_audit(
+            now=now,
+            actor="local_user",
+            action="risk_status_changed",
+            evidence_kind=EvidenceKind.HUMAN_DECISION.value,
+            summary=(
+                f"Marked {match.id} as {new_status}. "
+                f"Rule {match.rule_id}. Evidence was not deleted."
+            ),
+            risk_id=match.id,
+            rule_id=match.rule_id,
+        )
+        match.status = new_status
+        match.re_review_note = ""
+        return match
+
+    def _write_review_updates(self, updates: list, *, now: str) -> None:
+        for update in updates:
+            self._save_review(
+                risk_id=update.risk_id,
+                fingerprint=update.evidence_fingerprint,
+                status=update.status,
+                now=now,
+                actor="system",
+                re_review_required=update.re_review_required,
+                re_review_note=update.re_review_note,
+            )
+            if not update.write_audit:
+                continue
+            self._insert_audit(
+                now=now,
+                actor="system",
+                action="risk_reopened_for_rereview",
+                evidence_kind=EvidenceKind.DETERMINISTIC_RULE.value,
+                summary=(
+                    f"Reopened {update.risk_id} for re-review. "
+                    f"Previous status was {update.previous_status}. "
+                    "The evidence no longer matches the saved review."
+                ),
+                risk_id=update.risk_id,
+                rule_id=update.rule_id,
+            )
+
+    def _save_review(
+        self,
+        *,
+        risk: Risk | None = None,
+        risk_id: str | None = None,
+        fingerprint: str | None = None,
+        status: str,
+        now: str,
+        actor: str,
+        re_review_required: bool,
+        re_review_note: str,
+    ) -> None:
+        stored_id = risk.id if risk is not None else risk_id
+        stored_fingerprint = risk.evidence_fingerprint if risk is not None else fingerprint
+        with self._session() as connection:
+            connection.execute(
+                """
+                INSERT INTO risk_reviews (
+                    risk_id, status, evidence_fingerprint, actor, updated_at,
+                    re_review_required, re_review_note
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(risk_id) DO UPDATE SET
+                    status = excluded.status,
+                    evidence_fingerprint = excluded.evidence_fingerprint,
+                    actor = excluded.actor,
+                    updated_at = excluded.updated_at,
+                    re_review_required = excluded.re_review_required,
+                    re_review_note = excluded.re_review_note
+                """,
+                (
+                    stored_id,
+                    status,
+                    stored_fingerprint,
+                    actor,
+                    now,
+                    1 if re_review_required else 0,
+                    re_review_note,
+                ),
+            )
+            connection.commit()
+
+    def _insert_audit(
+        self,
+        *,
+        now: str,
+        actor: str,
+        action: str,
+        evidence_kind: str,
+        summary: str,
+        risk_id: str,
+        rule_id: str,
+    ) -> None:
+        with self._session() as connection:
+            connection.execute(
+                """
+                INSERT INTO audit_events (
+                    occurred_at, actor, action, evidence_kind, summary, risk_id, rule_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (now, actor, action, evidence_kind, summary, risk_id, rule_id),
+            )
+            connection.commit()

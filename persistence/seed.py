@@ -18,6 +18,7 @@ import pandas as pd
 
 from domain.evidence import EvidenceKind
 from domain.models import OrderStatus, RegionCode, ShipmentStatus, SupplierStatus
+from domain.risks import DATASET_AS_OF_DATE
 from persistence.connection import RegionConfig, connect, load_region_config
 from persistence.schema import SCHEMA_SQL
 
@@ -27,6 +28,7 @@ CHAIN_SCOPED_TABLES = (
     "warehouses",
     "inventory",
     "purchase_orders",
+    "demand_history",
 )
 
 REQUIRED_COLUMNS: dict[str, tuple[str, ...]] = {
@@ -69,6 +71,15 @@ REQUIRED_COLUMNS: dict[str, tuple[str, ...]] = {
         "departed_on",
         "eta",
         "arrived_on",
+    ),
+    "demand_history": (
+        "id",
+        "supply_chain_id",
+        "warehouse_id",
+        "product_id",
+        "period_start",
+        "period_end",
+        "quantity_issued",
     ),
 }
 
@@ -167,6 +178,7 @@ def _validate_frames(config: RegionConfig, frames: dict[str, pd.DataFrame]) -> N
     _require_unique(frames["purchase_orders"], "id", "purchase_orders.csv")
     _require_unique(frames["purchase_order_lines"], "id", "purchase_order_lines.csv")
     _require_unique(frames["shipments"], "id", "shipments.csv")
+    _require_unique(frames["demand_history"], "id", "demand_history.csv")
 
     inventory_key = frames["inventory"]["warehouse_id"] + "|" + frames["inventory"]["product_id"]
     if inventory_key.duplicated().any():
@@ -199,6 +211,8 @@ def _validate_frames(config: RegionConfig, frames: dict[str, pd.DataFrame]) -> N
     _require_known(frames["purchase_order_lines"]["purchase_order_id"], order_ids, "order line purchase_order_id")
     _require_known(frames["purchase_order_lines"]["product_id"], product_ids, "order line product_id")
     _require_known(frames["shipments"]["purchase_order_id"], order_ids, "shipment purchase_order_id")
+    _require_known(frames["demand_history"]["warehouse_id"], warehouse_ids, "demand warehouse_id")
+    _require_known(frames["demand_history"]["product_id"], product_ids, "demand product_id")
 
     if not frames["purchase_order_lines"]["currency"].eq(config.currency).all():
         raise ValueError(
@@ -210,6 +224,8 @@ def _validate_frames(config: RegionConfig, frames: dict[str, pd.DataFrame]) -> N
         _require_non_negative(frames[table][column], f"{table}.{column}")
     _require_positive(frames["purchase_order_lines"]["quantity"], "quantity")
     _require_positive(frames["purchase_order_lines"]["unit_cost_minor"], "unit_cost_minor")
+    _require_positive(frames["demand_history"]["quantity_issued"], "quantity_issued")
+    _validate_demand_periods(frames["demand_history"])
 
     for _, order in frames["purchase_orders"].iterrows():
         ordered = _parse_date(order["ordered_on"], f"{order['id']} ordered_on")
@@ -219,6 +235,30 @@ def _validate_frames(config: RegionConfig, frames: dict[str, pd.DataFrame]) -> N
 
     for _, shipment in frames["shipments"].iterrows():
         _validate_shipment_dates(shipment)
+
+
+def _validate_demand_periods(frame: pd.DataFrame) -> None:
+    """Issue periods must be real dates, in order, and not overlapping."""
+    seen: dict[str, list[tuple[date, date]]] = {}
+    for _, period in frame.iterrows():
+        label = str(period["id"])
+        start = _parse_date(str(period["period_start"]), f"{label} period_start")
+        end = _parse_date(str(period["period_end"]), f"{label} period_end")
+        if end < start:
+            raise ValueError(f"{label} period_end is earlier than period_start.")
+        if end > DATASET_AS_OF_DATE:
+            raise ValueError(
+                f"{label} ends after the synthetic dataset as-of date {DATASET_AS_OF_DATE.isoformat()}."
+            )
+        key = f"{period['warehouse_id']}|{period['product_id']}"
+        seen.setdefault(key, []).append((start, end))
+    for key, ranges in seen.items():
+        ranges.sort()
+        previous_end: date | None = None
+        for start, end in ranges:
+            if previous_end is not None and start <= previous_end:
+                raise ValueError(f"Demand periods overlap for {key}.")
+            previous_end = end
 
 
 def _validate_shipment_dates(shipment: pd.Series) -> None:
@@ -348,6 +388,26 @@ def _insert_frames(
         ),
         empty_as_null={"departed_on", "arrived_on"},
     )
+    _executemany(
+        connection,
+        """
+        INSERT INTO demand_history (
+            id, supply_chain_id, warehouse_id, product_id,
+            period_start, period_end, quantity_issued
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        frames["demand_history"],
+        (
+            "id",
+            "supply_chain_id",
+            "warehouse_id",
+            "product_id",
+            "period_start",
+            "period_end",
+            "quantity_issued",
+        ),
+        integers={"quantity_issued"},
+    )
 
     seeded_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     meta = {
@@ -361,6 +421,8 @@ def _insert_frames(
         "organization_id": str(organization["id"]),
         "supply_chain_id": str(chain["id"]),
         "seeded_at": seeded_at,
+        # Fixed dataset clock for overdue checks. Not the computer's current date.
+        "dataset_as_of": DATASET_AS_OF_DATE.isoformat(),
     }
     connection.executemany(
         "INSERT INTO app_meta (key, value) VALUES (?, ?)",

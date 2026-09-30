@@ -38,6 +38,8 @@ def _inventory(on_hand: int, reorder_point: int) -> InventoryRow:
     return InventoryRow(
         id="INV",
         supply_chain_id="SC",
+        warehouse_id="WH",
+        product_id="PRD",
         warehouse_name="DC",
         sku="SKU",
         product_name="Item",

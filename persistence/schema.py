@@ -110,6 +110,31 @@ CREATE TABLE audit_events (
     actor TEXT NOT NULL,
     action TEXT NOT NULL,
     evidence_kind TEXT NOT NULL,
-    summary TEXT NOT NULL
+    summary TEXT NOT NULL,
+    risk_id TEXT,
+    rule_id TEXT
+);
+
+-- Synthetic issue history used only for days-of-coverage estimates.
+CREATE TABLE demand_history (
+    id TEXT PRIMARY KEY,
+    supply_chain_id TEXT NOT NULL REFERENCES supply_chains(id),
+    warehouse_id TEXT NOT NULL REFERENCES warehouses(id),
+    product_id TEXT NOT NULL REFERENCES products(id),
+    period_start TEXT NOT NULL,
+    period_end TEXT NOT NULL,
+    quantity_issued INTEGER NOT NULL CHECK (quantity_issued > 0)
+);
+
+-- Review status is kept by stable risk id. The evidence fingerprint decides
+-- whether a reviewed or resolved status still applies after a recalculation.
+CREATE TABLE risk_reviews (
+    risk_id TEXT PRIMARY KEY,
+    status TEXT NOT NULL CHECK (status IN ('open', 'reviewed', 'resolved')),
+    evidence_fingerprint TEXT NOT NULL,
+    actor TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    re_review_required INTEGER NOT NULL CHECK (re_review_required IN (0, 1)),
+    re_review_note TEXT NOT NULL
 );
 """

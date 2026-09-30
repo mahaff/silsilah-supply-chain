@@ -109,6 +109,18 @@ def region_banner() -> rx.Component:
             margin_top="3",
             font_family=SANS,
         ),
+        rx.cond(
+            WarRoomState.dataset_as_of != "",
+            rx.text(
+                "Synthetic dataset as-of date: ",
+                WarRoomState.dataset_as_of,
+                ". This is not today's date.",
+                color="rgba(255,255,255,0.9)",
+                margin_top="2",
+                font_family=SANS,
+            ),
+            rx.fragment(),
+        ),
         background_color=rx.cond(WarRoomState.region_code == "ksa", KSA, PAKISTAN),
         border_radius="16px",
         padding="5",

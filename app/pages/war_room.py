@@ -5,6 +5,7 @@ import reflex as rx
 from app.components.data_tables import data_tables
 from app.components.governance_panel import governance_panel
 from app.components.metric_cards import metric_cards
+from app.components.risk_register import risk_register
 from app.components.region_banner import page_intro, region_banner, region_switch
 from app.state import WarRoomState
 from app.style import INK, MUTED, PAGE_BG, SANS, SERIF
@@ -70,6 +71,7 @@ def _loaded_body() -> rx.Component:
             font_family=SANS,
         ),
         metric_cards(),
+        risk_register(),
         rx.heading(
             "Records",
             size="5",

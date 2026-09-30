@@ -49,6 +49,26 @@ Pakistan lows: Karachi bottled water (20 / 50), Karachi detergent (12 / 20), and
 
 Prices on order lines are integers of minor units. One SAR is 100 halalas. One PKR is 100 paisas. The database does not use floating-point money.
 
+## Risk register (MVP 2)
+
+The register is a set of Python rules on the synthetic rows. It does not predict a delay, a stockout date, or a supplier reliability score. Severity is the word `attention` or `watch`, not a probability.
+
+The synthetic dataset as-of date is **2026-10-01** for both regions. Overdue checks compare a shipment's expected arrival (`eta`) with that date. The screen labels it as the dataset date. It is not today's date, and the rules do not read the computer clock.
+
+| Rule | Severity | Why |
+| --- | --- | --- |
+| `inventory.below_reorder` | attention | On-hand quantity is already under the reorder point. |
+| `shipment.delayed_status` | attention | The shipment row already says delayed. |
+| `shipment.eta_passed_not_delivered` | attention | Expected arrival is before 2026-10-01 and the shipment is not delivered. |
+| `supplier.delayed_shipment_present` | watch | At least one linked shipment is delayed. One delay is not a reliability rating. |
+| `supplier.order_share` | watch | At least three purchase orders and at least half of the chain. This sample does not meet the rule. |
+
+Days of coverage use `demand_history` only when a product at a warehouse has at least two synthetic issue periods. Otherwise the risk says demand history is insufficient and does not give a stockout date. Riyadh rice and Karachi bottled water have two periods. The other low-stock lines do not.
+
+A review status stays with the stable risk id. It is kept on the next calculation only when the evidence fingerprint still matches. If the evidence changes after a reviewed or resolved status, the risk is reopened and marked for re-review. The evidence is not deleted. Status changes are audit rows with actor `local_user`.
+
+Supplier indicators always show delayed-shipment counts and order share. A delay proportion is shown only when that supplier has at least three linked shipments.
+
 ## How the two regions stay separate
 
 - `regions/ksa/` and `regions/pakistan/` each have their own config and CSV files.
@@ -93,6 +113,8 @@ python -m persistence.seed
 python -m pytest
 reflex run
 ```
+
+Stop `reflex run` before seeding again if Windows says the database file is locked. After this MVP, run `python -m persistence.seed` once so the risk tables and the dataset as-of date exist. An older database file does not gain those tables by itself.
 
 Then open [http://127.0.0.1:3217](http://127.0.0.1:3217).
 
