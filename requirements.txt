@@ -1,9 +1,11 @@
-# Direct packages for Silsilah MVP 1.
+# Direct packages for Silsilah.
 # SQLite is part of Python, so it is not listed here.
-# Do not add scikit-learn, Plotly, LangGraph, or an LLM SDK for this MVP.
+# scikit-learn trains the MVP 3 synthetic late-arrival demonstration.
+# Do not add Plotly, LangGraph, a vector database, or an LLM SDK.
 
 reflex==0.9.12
 pandas==3.0.6
 pydantic==2.13.5
 python-dotenv==1.2.3
 pytest==9.1.1
+scikit-learn==1.9.1

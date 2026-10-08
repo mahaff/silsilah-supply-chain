@@ -189,6 +189,24 @@ class AuditEvent(BaseModel):
     rule_id: str | None = None
 
 
+class ShipmentHistoryTrip(BaseModel):
+    """One completed synthetic trip used only by the predictive demonstration.
+
+    These rows are not operational shipments. The risk register does not read them.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    supply_chain_id: str
+    supplier_id: str
+    origin: str
+    destination: str
+    departed_on: str
+    eta: str
+    arrived_on: str
+
+
 class DemandPeriod(BaseModel):
     """Synthetic quantity issued for one product at one warehouse.
 

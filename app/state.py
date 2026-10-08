@@ -16,6 +16,7 @@ from llm.null_provider import get_provider
 from persistence.connection import load_region_config
 from persistence.repository import RegionRepository
 from persistence.seed import seed_region
+from prediction.model import PredictionSnapshot, build_prediction_snapshot
 
 
 class WarRoomState(rx.State):
@@ -67,6 +68,14 @@ class WarRoomState(rx.State):
     selected_evidence: str = ""
     selected_status: str = ""
     selected_rereview: str = ""
+
+    prediction_disclaimer: str = ""
+    prediction_target: str = ""
+    prediction_counts: str = ""
+    prediction_chrono_text: str = ""
+    prediction_random_text: str = ""
+    prediction_operational_note: str = ""
+    prediction_estimates: list[dict[str, str]] = []
 
     def load_region(self):
         """Load whichever region is already selected. Used when the page opens."""
@@ -244,6 +253,15 @@ class WarRoomState(rx.State):
             for indicator in indicators
         ]
         self._remember_risk_detail(risks)
+        self._fill_prediction(
+            build_prediction_snapshot(
+                history=repository.list_shipment_history(chain_id),
+                suppliers=suppliers,
+                shipments=shipments,
+                orders=orders,
+                dataset_as_of=self.dataset_as_of,
+            )
+        )
 
     def _set_risk_status(self, status: str):
         if not self.selected_risk_id:
@@ -277,6 +295,24 @@ class WarRoomState(rx.State):
             match.status, match.status
         )
         self.selected_rereview = match.re_review_note
+
+    def _fill_prediction(self, snapshot: PredictionSnapshot) -> None:
+        self.prediction_disclaimer = snapshot.disclaimer
+        self.prediction_target = snapshot.target
+        self.prediction_counts = snapshot.counts_summary()
+        self.prediction_chrono_text = snapshot.chronological.summary()
+        self.prediction_random_text = snapshot.random_split.summary()
+        self.prediction_operational_note = snapshot.operational_note
+        self.prediction_estimates = [_estimate_row(estimate) for estimate in snapshot.estimates]
+
+    def _clear_prediction(self) -> None:
+        self.prediction_disclaimer = ""
+        self.prediction_target = ""
+        self.prediction_counts = ""
+        self.prediction_chrono_text = ""
+        self.prediction_random_text = ""
+        self.prediction_operational_note = ""
+        self.prediction_estimates = []
 
     def _clear_risk_detail(self) -> None:
         self.selected_title = ""
@@ -319,6 +355,18 @@ class WarRoomState(rx.State):
         self.supplier_indicators = []
         self.selected_risk_id = ""
         self._clear_risk_detail()
+        self._clear_prediction()
+
+
+def _estimate_row(estimate) -> dict[str, str]:
+    return {
+        "shipment_id": estimate.shipment_id,
+        "outcome": "Estimate" if estimate.scored else "Not scored",
+        "probability": "" if estimate.probability is None else f"{estimate.probability:.2f}",
+        "sentence": estimate.sentence,
+        "reason": estimate.reason,
+        "factors": "\n".join(item.sentence for item in estimate.contributions),
+    }
 
 
 def _utc_now() -> str:

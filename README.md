@@ -69,6 +69,45 @@ A review status stays with the stable risk id. It is kept on the next calculatio
 
 Supplier indicators always show delayed-shipment counts and order share. A delay proportion is shown only when that supplier has at least three linked shipments.
 
+## Predictive risk (MVP 3)
+
+Predictive risk is a separate section. It does not replace the risk register, and it does not read the register's rules.
+
+The risk register applies deterministic rules to known conditions. Predictive risk is a synthetic ML demonstration. It estimates whether a departed shipment arrives after its expected date. Arrival on the expected date counts as not late. The estimate is based on synthetic historical data. It is not a real-world forecast, not a recorded fact, and not a compliance or legal determination.
+
+Each region has its own `shipment_history` table, loaded from `regions/<region>/seed/shipment_history.csv`. Those 48 completed trips are not inserted into `shipments`. Metrics, delayed-shipment counts, supplier indicators, risk ids, reviews, and audits ignore that table.
+
+The history is a demonstration set for checking the pipeline. Saudi Arabia trips depart from 2026-04-06. Pakistan trips depart from 2026-04-09. Both files end in early September 2026, on or before the dataset as-of date 2026-10-01. Late and on-time outcomes were assigned so that every supplier has both outcomes and the later trips still contain both outcomes. Lead time, city, and promised transit length are not a formula that produces the label.
+
+Each file has 48 trips, 23 of them late. A trip needs three earlier trips from the same supplier before it can be used. That excludes 12 trips. The scoring model is fit on the remaining 36 (17 late, 19 on time).
+
+Features known at departure:
+
+| Feature | Meaning |
+| --- | --- |
+| Stored lead time | The supplier's lead time in the supplier table |
+| Planned transit length | Expected arrival minus departure, in days |
+| Same city | Whether origin and destination match |
+| Earlier late share | Share of that supplier's earlier completed trips that arrived after the expected date |
+| Earlier trip count | How many earlier trips that share is based on |
+
+The earlier-trip features use `departed_on` strictly before the trip being described. They do not use that trip's arrival, lateness, or status, and they do not use a later trip.
+
+The model is logistic regression in scikit-learn, with scaled features, `class_weight="balanced"`, and `random_state=42`. It is retrained in memory when the page loads. No model file is saved.
+
+Evaluation on the screen is two separate reports:
+
+- Primary: a chronological holdout. Earlier eligible trips train the evaluation model. Later eligible trips test it. On this demonstration file that is 27 training rows (13 late, 14 on time) and 9 test rows (4 late, 5 on time). If the later block did not contain at least two late and two on-time trips, the screen says the chronological holdout is not reported.
+- Secondary: a stratified random split of 25 percent, also with `random_state=42`. This check is not time-ordered. A later training trip can include an earlier trip that landed in the test fold. Features for any one trip still use only earlier departures.
+
+Both reports include accuracy, balanced accuracy, late precision, late recall, ROC AUC when both outcomes are in the test block, and the same metrics for a majority-class baseline. Those numbers describe this synthetic file. They are not a promise about real shipments. When the demonstration model's accuracy is below the majority-class baseline, the page says so.
+
+On this file the chronological holdout does not support a forecast. Saudi Arabia accuracy is 0.44 against a majority-class baseline of 0.56. Pakistan accuracy is 0.67, with late recall of 0.25, against the same 0.56 baseline. The random-split numbers are higher for Saudi Arabia (accuracy 0.78) and level with the baseline for Pakistan (accuracy 0.56). The random split is the secondary check and is not time-ordered.
+
+The page scores an operational shipment only when it is in transit and already has a departure date. A recorded delay or delivery is left to the risk register. A planned shipment with no departure date is not scored. If a region has no eligible shipment, the section says so. Pakistan's current operational file has no in-transit shipment, so it shows the model and the evaluations without a probability.
+
+The three largest absolute contributions are shown as "increased the model estimate" or "decreased the model estimate". The wording does not say a supplier caused a delay.
+
 ## How the two regions stay separate
 
 - `regions/ksa/` and `regions/pakistan/` each have their own config and CSV files.
@@ -114,7 +153,7 @@ python -m pytest
 reflex run
 ```
 
-Stop `reflex run` before seeding again if Windows says the database file is locked. After this MVP, run `python -m persistence.seed` once so the risk tables and the dataset as-of date exist. An older database file does not gain those tables by itself.
+Stop `reflex run` before seeding again if Windows says the database file is locked. After this MVP, run `python -m persistence.seed` once so the risk tables, the dataset as-of date, and `shipment_history` exist. An older database file does not gain those tables by itself.
 
 Then open [http://127.0.0.1:3217](http://127.0.0.1:3217).
 
@@ -134,25 +173,31 @@ If you skip the seed command, the first page load creates a missing database fro
 - an empty governance table
 - the null provider does not repeat a calculated number
 - a Pakistan file cannot be opened as Saudi Arabia
+- history labels, prior-only features, chronological and random evaluations
+- refusal when the history is too small, and a one-class chronological tail
+- Saudi Arabia and Pakistan models stay on their own history
+- a recorded delay is not given a probability
+- MVP 2 risk ids and the six metrics stay the same after history is loaded
 
 ## Project layout
 
 ```text
 app/                 Reflex pages and screen state
-domain/              Models, evidence labels, and metric rules
+domain/              Models, evidence labels, metric rules, and risk rules
 persistence/         Region config, SQLite schema, reads, and seeding
+prediction/          Synthetic late-arrival features, model, and explanations
 regions/ksa/         Saudi Arabia config, seed CSVs, governance notes
 regions/pakistan/    Pakistan config, seed CSVs, governance notes
 governance/          Status text for the panel
 llm/                 Provider interface and the null provider
-tests/               Isolation, seed, and metric tests
+tests/               Isolation, seed, metric, risk, and prediction tests
 data/                Generated SQLite files (not committed)
 reflex.lock/         Frontend package list created by Reflex (kept)
 ```
 
 The first `reflex run` also creates a `.web/` folder. That folder is generated output and is gitignored.
 
-These folders are intentionally absent: `ml/`, `agents/`, and `simulation/`. They belong to later phases.
+`agents/` and `simulation/` are still absent. Predictive risk lives in `prediction/` and does not add an agent.
 
 ## Decisions worth knowing
 
@@ -176,8 +221,8 @@ These folders are intentionally absent: `ml/`, `agents/`, and `simulation/`. The
 
 ## What is not installed
 
-scikit-learn, Plotly, LangGraph, an xAI or other model SDK, Ollama, PostgreSQL, Redis, and Docker are not required for MVP 1. Do not add them until a later phase actually uses them.
+Plotly, LangGraph, a vector database, an xAI or other model SDK, Ollama, PostgreSQL, and Docker are not required. scikit-learn is installed for the synthetic late-arrival demonstration only. The null language-model provider is unchanged.
 
 ## What this version will not do
 
-It will not place orders, send messages, approve an action, simulate a recovery step, predict risk with a model, or describe a law. Those steps are later work and need their own review.
+It will not place orders, send messages, approve an action, contact a supplier, recommend a purchase, simulate a recovery step, or describe a law. The late-arrival section is an estimate on synthetic history, not a real-world forecast, and it does not replace the risk register.

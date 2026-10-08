@@ -29,6 +29,7 @@ CHAIN_SCOPED_TABLES = (
     "inventory",
     "purchase_orders",
     "demand_history",
+    "shipment_history",
 )
 
 REQUIRED_COLUMNS: dict[str, tuple[str, ...]] = {
@@ -80,6 +81,16 @@ REQUIRED_COLUMNS: dict[str, tuple[str, ...]] = {
         "period_start",
         "period_end",
         "quantity_issued",
+    ),
+    "shipment_history": (
+        "id",
+        "supply_chain_id",
+        "supplier_id",
+        "origin",
+        "destination",
+        "departed_on",
+        "eta",
+        "arrived_on",
     ),
 }
 
@@ -179,6 +190,7 @@ def _validate_frames(config: RegionConfig, frames: dict[str, pd.DataFrame]) -> N
     _require_unique(frames["purchase_order_lines"], "id", "purchase_order_lines.csv")
     _require_unique(frames["shipments"], "id", "shipments.csv")
     _require_unique(frames["demand_history"], "id", "demand_history.csv")
+    _require_unique(frames["shipment_history"], "id", "shipment_history.csv")
 
     inventory_key = frames["inventory"]["warehouse_id"] + "|" + frames["inventory"]["product_id"]
     if inventory_key.duplicated().any():
@@ -213,6 +225,11 @@ def _validate_frames(config: RegionConfig, frames: dict[str, pd.DataFrame]) -> N
     _require_known(frames["shipments"]["purchase_order_id"], order_ids, "shipment purchase_order_id")
     _require_known(frames["demand_history"]["warehouse_id"], warehouse_ids, "demand warehouse_id")
     _require_known(frames["demand_history"]["product_id"], product_ids, "demand product_id")
+    _require_known(
+        frames["shipment_history"]["supplier_id"],
+        supplier_ids,
+        "shipment history supplier_id",
+    )
 
     if not frames["purchase_order_lines"]["currency"].eq(config.currency).all():
         raise ValueError(
@@ -235,6 +252,41 @@ def _validate_frames(config: RegionConfig, frames: dict[str, pd.DataFrame]) -> N
 
     for _, shipment in frames["shipments"].iterrows():
         _validate_shipment_dates(shipment)
+    _validate_shipment_history(
+        frames["shipment_history"],
+        shipment_ids=set(frames["shipments"]["id"]),
+    )
+
+
+def _validate_shipment_history(frame: pd.DataFrame, shipment_ids: set[str]) -> None:
+    """History rows are completed demonstration trips, not operational shipments."""
+    if len(frame) != 48:
+        raise ValueError(
+            "shipment_history.csv must contain 48 synthetic demonstration trips."
+        )
+    overlap = sorted(set(frame["id"]) & shipment_ids)
+    if overlap:
+        raise ValueError(
+            "shipment_history.csv ids must not reuse operational shipment ids: "
+            + ", ".join(overlap)
+        )
+    for _, trip in frame.iterrows():
+        label = str(trip["id"])
+        if not str(trip["origin"]) or not str(trip["destination"]):
+            raise ValueError(f"{label} needs an origin and a destination.")
+        departed = _parse_date(str(trip["departed_on"]), f"{label} departed_on")
+        eta = _parse_date(str(trip["eta"]), f"{label} eta")
+        arrived = _parse_date(str(trip["arrived_on"]), f"{label} arrived_on")
+        if eta < departed:
+            raise ValueError(f"{label} eta is earlier than departed_on.")
+        if arrived < departed:
+            raise ValueError(f"{label} arrived_on is earlier than departed_on.")
+        latest = max(departed, eta, arrived)
+        if latest > DATASET_AS_OF_DATE:
+            raise ValueError(
+                f"{label} is after the synthetic dataset as-of date "
+                f"{DATASET_AS_OF_DATE.isoformat()}."
+            )
 
 
 def _validate_demand_periods(frame: pd.DataFrame) -> None:
@@ -408,6 +460,26 @@ def _insert_frames(
         ),
         integers={"quantity_issued"},
     )
+    _executemany(
+        connection,
+        """
+        INSERT INTO shipment_history (
+            id, supply_chain_id, supplier_id, origin, destination,
+            departed_on, eta, arrived_on
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        frames["shipment_history"],
+        (
+            "id",
+            "supply_chain_id",
+            "supplier_id",
+            "origin",
+            "destination",
+            "departed_on",
+            "eta",
+            "arrived_on",
+        ),
+    )
 
     seeded_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     meta = {
@@ -423,6 +495,8 @@ def _insert_frames(
         "seeded_at": seeded_at,
         # Fixed dataset clock for overdue checks. Not the computer's current date.
         "dataset_as_of": DATASET_AS_OF_DATE.isoformat(),
+        # History trips are a demonstration set for the predictive section only.
+        "shipment_history_role": "synthetic_ml_demonstration",
     }
     connection.executemany(
         "INSERT INTO app_meta (key, value) VALUES (?, ?)",

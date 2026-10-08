@@ -126,6 +126,19 @@ CREATE TABLE demand_history (
     quantity_issued INTEGER NOT NULL CHECK (quantity_issued > 0)
 );
 
+-- Completed synthetic trips for the predictive demonstration only.
+-- The risk register, metrics, and supplier indicators do not read this table.
+CREATE TABLE shipment_history (
+    id TEXT PRIMARY KEY,
+    supply_chain_id TEXT NOT NULL REFERENCES supply_chains(id),
+    supplier_id TEXT NOT NULL REFERENCES suppliers(id),
+    origin TEXT NOT NULL,
+    destination TEXT NOT NULL,
+    departed_on TEXT NOT NULL,
+    eta TEXT NOT NULL,
+    arrived_on TEXT NOT NULL
+);
+
 -- Review status is kept by stable risk id. The evidence fingerprint decides
 -- whether a reviewed or resolved status still applies after a recalculation.
 CREATE TABLE risk_reviews (

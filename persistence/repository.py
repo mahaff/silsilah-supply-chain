@@ -21,6 +21,7 @@ from domain.models import (
     PurchaseOrderRow,
     RegionScope,
     Shipment,
+    ShipmentHistoryTrip,
     Supplier,
     SupplyChain,
     Warehouse,
@@ -237,6 +238,7 @@ class RegionRepository:
         return [PurchaseOrderLine.model_validate(dict(row)) for row in rows]
 
     def list_shipments(self, supply_chain_id: str) -> list[Shipment]:
+        """Operational shipments only. shipment_history is not included."""
         with self._session() as connection:
             rows = connection.execute(
                 """
@@ -257,6 +259,21 @@ class RegionRepository:
                 (supply_chain_id,),
             ).fetchall()
         return [Shipment.model_validate(dict(row)) for row in rows]
+
+    def list_shipment_history(self, supply_chain_id: str) -> list[ShipmentHistoryTrip]:
+        """Completed synthetic trips for the predictive demonstration in this file."""
+        with self._session() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, supply_chain_id, supplier_id, origin, destination,
+                       departed_on, eta, arrived_on
+                FROM shipment_history
+                WHERE supply_chain_id = ?
+                ORDER BY departed_on, id
+                """,
+                (supply_chain_id,),
+            ).fetchall()
+        return [ShipmentHistoryTrip.model_validate(dict(row)) for row in rows]
 
     def governance_reference_count(self) -> int:
         with self._session() as connection:
