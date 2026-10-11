@@ -2,6 +2,7 @@
 
 import reflex as rx
 
+from app.components.tip import tip
 from app.state import WarRoomState
 from app.style import CARD, INK, LINE, MUTED, SANS, SERIF
 
@@ -81,17 +82,23 @@ def _report() -> rx.Component:
             WarRoomState.investigation_status == "draft",
             rx.vstack(
                 rx.flex(
-                    rx.button(
-                        "Accept",
-                        on_click=WarRoomState.accept_report,
-                        color_scheme="teal",
-                        cursor="pointer",
+                    tip(
+                        rx.button(
+                            "Accept",
+                            on_click=WarRoomState.accept_report,
+                            color_scheme="teal",
+                            cursor="pointer",
+                        ),
+                        "Acknowledge this report. The risk status and the operational rows stay as they are.",
                     ),
-                    rx.button(
-                        "Dismiss",
-                        on_click=WarRoomState.dismiss_report,
-                        variant="outline",
-                        cursor="pointer",
+                    tip(
+                        rx.button(
+                            "Dismiss",
+                            on_click=WarRoomState.dismiss_report,
+                            variant="outline",
+                            cursor="pointer",
+                        ),
+                        "Set this report aside. Nothing in the register or the shipment table changes.",
                     ),
                     gap="3",
                     wrap="wrap",

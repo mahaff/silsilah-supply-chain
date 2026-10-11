@@ -6,6 +6,7 @@ The as-of date shown here is the synthetic dataset date, not today's date.
 
 import reflex as rx
 
+from app.components.tip import tip
 from app.state import WarRoomState
 from app.style import AMBER_BG, AMBER_INK, CARD, INK, KSA, LINE, MUTED, SANS, SERIF
 
@@ -157,11 +158,14 @@ def _risk_detail() -> rx.Component:
                 rx.fragment(),
             ),
             rx.flex(
-                rx.button(
-                    "Investigate",
-                    on_click=WarRoomState.investigate_selected,
-                    variant="outline",
-                    cursor="pointer",
+                tip(
+                    rx.button(
+                        "Investigate",
+                        on_click=WarRoomState.investigate_selected,
+                        variant="outline",
+                        cursor="pointer",
+                    ),
+                    "Draft a read-only report from this risk. It does not mark the risk reviewed or resolved.",
                 ),
                 rx.button(
                     "Mark reviewed",

@@ -2,6 +2,7 @@
 
 import reflex as rx
 
+from app.components.tip import tip
 from app.state import WarRoomState
 from app.style import CARD, INK, LINE, MUTED, SANS, SERIF
 
@@ -123,12 +124,15 @@ def _estimate_card(row: dict) -> rx.Component:
         ),
         rx.cond(
             row["probability"] != "",
-            rx.button(
-                "Investigate",
-                on_click=WarRoomState.investigate_estimate(row["shipment_id"]),
-                variant="outline",
-                cursor="pointer",
-                margin_top="3",
+            tip(
+                rx.button(
+                    "Investigate",
+                    on_click=WarRoomState.investigate_estimate(row["shipment_id"]),
+                    variant="outline",
+                    cursor="pointer",
+                    margin_top="3",
+                ),
+                "Draft a report for this estimate. The probability and the deterministic rule stay separate.",
             ),
             rx.fragment(),
         ),

@@ -122,6 +122,26 @@ Accept acknowledges the report. Dismiss sets it aside. Neither one marks a risk 
 
 No language model writes the report. `llm/null_provider.py` is unchanged. Nothing is sent outside the machine. Run `python -m persistence.seed` after this version so each regional file has an empty `investigations` table. An older database does not gain that table by itself.
 
+## Corridor picture
+
+Under the metric cards, the page draws the ports named in that region's file. Gulf ports and the Strait of Hormuz blink. A white ring means the city is on a supplier or shipment row. The bars are on-hand units by product category, and order quantity on a lane that names Dammam or Jubail.
+
+Families group those categories. Consumer covers beverages, staples, and household goods. Industry covers automotive, packaging, and electronics. Medicine and weapons are shown at zero: this synthetic file has no such rows, and the screen does not describe controlled goods. The drawing is not a live vessel feed and not a political assessment.
+
+Hover a port, a bar, a family tile, a metric, or Investigate. The tooltip names what that control uses.
+
+## How to test it
+
+With the app stopped, from this folder:
+
+```powershell
+python -m pytest
+python -m persistence.seed
+reflex run
+```
+
+Then open [http://127.0.0.1:3217](http://127.0.0.1:3217). Switch Saudi Arabia and Pakistan. Hover Dammam and the Strait of Hormuz. Confirm medicine and weapons stay at zero. Click Investigate on a risk, then Accept, and confirm the risk status is still Open.
+
 ## How the two regions stay separate
 
 - `regions/ksa/` and `regions/pakistan/` each have their own config and CSV files.

@@ -8,9 +8,19 @@ from app.components.investigation_panel import investigation_panel
 from app.components.metric_cards import metric_cards
 from app.components.prediction_panel import prediction_panel
 from app.components.risk_register import risk_register
+from app.components.route_picture import route_picture
 from app.components.region_banner import page_intro, region_banner, region_switch
 from app.state import WarRoomState
 from app.style import INK, MUTED, PAGE_BG, SANS, SERIF
+
+
+_MOTION = """
+@keyframes port-blink {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(1.35); }
+}
+.port-blink { animation: port-blink 1.5s ease-in-out infinite; }
+"""
 
 
 def war_room_page() -> rx.Component:
@@ -40,12 +50,14 @@ def war_room_page() -> rx.Component:
                 _loaded_body(),
             ),
             rx.text(
-                "Local only. No purchasing, payments, messages, or other external actions.",
+                "Local only. No purchasing, payments, messages, or other external actions. "
+                "Hover a port, a bar, or a family tile for the source of that mark.",
                 color=MUTED,
                 font_size="14px",
                 margin_top="6",
                 font_family=SANS,
             ),
+            rx.el.style(_MOTION),
             max_width="1120px",
             margin_x="auto",
             padding_x="4",
@@ -73,6 +85,7 @@ def _loaded_body() -> rx.Component:
             font_family=SANS,
         ),
         metric_cards(),
+        route_picture(),
         risk_register(),
         prediction_panel(),
         investigation_panel(),

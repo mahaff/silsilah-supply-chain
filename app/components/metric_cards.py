@@ -2,6 +2,7 @@
 
 import reflex as rx
 
+from app.components.tip import tip
 from app.state import WarRoomState
 from app.style import CARD, INK, KSA, LINE, MUTED, SANS, SERIF
 
@@ -16,7 +17,8 @@ def metric_cards() -> rx.Component:
 
 
 def _metric_card(metric: dict) -> rx.Component:
-    return rx.box(
+    return tip(
+        rx.box(
         rx.text(metric["label"], color=MUTED, font_size="14px", font_family=SANS),
         rx.heading(
             metric["value"],
@@ -45,4 +47,6 @@ def _metric_card(metric: dict) -> rx.Component:
         border_radius="16px",
         padding="4",
         height="100%",
+        ),
+        metric["explanation"],
     )

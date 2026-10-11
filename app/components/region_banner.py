@@ -2,6 +2,7 @@
 
 import reflex as rx
 
+from app.components.tip import tip
 from app.state import WarRoomState
 from app.style import AMBER_BG, AMBER_INK, CARD, INK, KSA, LINE, MUTED, PAKISTAN, SANS, SERIF, WHITE
 
@@ -17,13 +18,16 @@ def region_switch() -> rx.Component:
 
 def _region_button(label: str, code: str, color_scheme: str) -> rx.Component:
     selected = WarRoomState.region_code == code
-    return rx.button(
-        label,
-        on_click=WarRoomState.select_region(code),
-        variant=rx.cond(selected, "solid", "outline"),
-        color_scheme=color_scheme,
-        size="3",
-        cursor="pointer",
+    return tip(
+        rx.button(
+            label,
+            on_click=WarRoomState.select_region(code),
+            variant=rx.cond(selected, "solid", "outline"),
+            color_scheme=color_scheme,
+            size="3",
+            cursor="pointer",
+        ),
+        f"Open the {label} database only. The other region stays in its own file.",
     )
 
 

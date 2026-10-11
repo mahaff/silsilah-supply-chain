@@ -13,6 +13,7 @@ from domain.risks import Risk, count_open
 from governance.status import build_governance_status
 from llm.base import FactPacket
 from llm.null_provider import get_provider
+from app.picture import build_picture
 from persistence.connection import load_region_config
 from persistence.repository import RegionRepository
 from persistence.seed import seed_region
@@ -92,6 +93,11 @@ class WarRoomState(rx.State):
     investigation_gaps: list[dict[str, str]] = []
     investigation_steps: list[dict[str, str]] = []
     investigation_gap_note: str = ""
+
+    picture_ports: list[dict[str, str]] = []
+    picture_categories: list[dict[str, str]] = []
+    picture_families: list[dict[str, str]] = []
+    picture_gulf_note: str = ""
 
     def load_region(self):
         """Load whichever region is already selected. Used when the page opens."""
@@ -261,6 +267,11 @@ class WarRoomState(rx.State):
             for metric in metrics
         ]
         self.order_line_count = str(len(lines))
+        picture = build_picture(products, inventory, lines, shipments, suppliers)
+        self.picture_ports = picture["ports"]
+        self.picture_categories = picture["categories"]
+        self.picture_families = picture["families"]
+        self.picture_gulf_note = picture["gulf_note"]
         self.governance_classification = governance.data_classification
         self.governance_references_loaded = str(governance.references_loaded)
         self.governance_disclaimer = governance.disclaimer
@@ -417,6 +428,10 @@ class WarRoomState(rx.State):
         self.investigation_gaps = []
         self.investigation_steps = []
         self.investigation_gap_note = ""
+        self.picture_ports = []
+        self.picture_categories = []
+        self.picture_families = []
+        self.picture_gulf_note = ""
 
     def _clear_prediction(self) -> None:
         self.prediction_disclaimer = ""
