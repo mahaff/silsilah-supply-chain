@@ -139,6 +139,19 @@ CREATE TABLE shipment_history (
     arrived_on TEXT NOT NULL
 );
 
+-- One investigation report per subject fingerprint. Drafting does not review a risk.
+CREATE TABLE investigations (
+    id TEXT PRIMARY KEY,
+    subject_kind TEXT NOT NULL CHECK (subject_kind IN ('risk', 'estimate')),
+    subject_id TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('draft', 'accepted', 'dismissed', 'stale')),
+    evidence_fingerprint TEXT NOT NULL,
+    report_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    actor TEXT NOT NULL
+);
+
 -- Review status is kept by stable risk id. The evidence fingerprint decides
 -- whether a reviewed or resolved status still applies after a recalculation.
 CREATE TABLE risk_reviews (

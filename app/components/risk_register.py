@@ -158,6 +158,12 @@ def _risk_detail() -> rx.Component:
             ),
             rx.flex(
                 rx.button(
+                    "Investigate",
+                    on_click=WarRoomState.investigate_selected,
+                    variant="outline",
+                    cursor="pointer",
+                ),
+                rx.button(
                     "Mark reviewed",
                     on_click=WarRoomState.mark_reviewed,
                     variant="outline",

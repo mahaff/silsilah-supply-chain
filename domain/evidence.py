@@ -1,8 +1,8 @@
 """Labels for where a number or sentence came from.
 
-MVP 1 only produces database facts and deterministic rules.
-The other labels exist so later phases can add predictions, model notes,
-and human decisions without renaming this idea.
+Database facts and deterministic rules come from stored rows.
+Predictions, investigation summaries, and human decisions use their own labels
+so a report cannot present one of them as another.
 """
 
 from enum import Enum
@@ -14,6 +14,7 @@ class EvidenceKind(str, Enum):
     ML_PREDICTION = "ml_prediction"
     LLM_REASONING = "llm_reasoning"
     HUMAN_DECISION = "human_decision"
+    INVESTIGATION_SUMMARY = "investigation_summary"
 
 
 EVIDENCE_LABELS: dict[EvidenceKind, str] = {
@@ -22,6 +23,7 @@ EVIDENCE_LABELS: dict[EvidenceKind, str] = {
     EvidenceKind.ML_PREDICTION: "ML prediction",
     EvidenceKind.LLM_REASONING: "LLM reasoning",
     EvidenceKind.HUMAN_DECISION: "Human decision",
+    EvidenceKind.INVESTIGATION_SUMMARY: "Investigation summary",
 }
 
 

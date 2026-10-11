@@ -4,6 +4,7 @@ import reflex as rx
 
 from app.components.data_tables import data_tables
 from app.components.governance_panel import governance_panel
+from app.components.investigation_panel import investigation_panel
 from app.components.metric_cards import metric_cards
 from app.components.prediction_panel import prediction_panel
 from app.components.risk_register import risk_register
@@ -74,6 +75,7 @@ def _loaded_body() -> rx.Component:
         metric_cards(),
         risk_register(),
         prediction_panel(),
+        investigation_panel(),
         rx.heading(
             "Records",
             size="5",

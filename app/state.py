@@ -17,6 +17,12 @@ from persistence.connection import load_region_config
 from persistence.repository import RegionRepository
 from persistence.seed import seed_region
 from prediction.model import PredictionSnapshot, build_prediction_snapshot
+from investigation.report import StaleInvestigation
+from investigation.workflow import (
+    accept_investigation,
+    dismiss_investigation,
+    run_investigation,
+)
 
 
 class WarRoomState(rx.State):
@@ -77,6 +83,16 @@ class WarRoomState(rx.State):
     prediction_operational_note: str = ""
     prediction_estimates: list[dict[str, str]] = []
 
+    investigation_id: str = ""
+    investigation_status: str = ""
+    investigation_subject: str = ""
+    investigation_finding: str = ""
+    investigation_notice: str = ""
+    investigation_claims: list[dict[str, str]] = []
+    investigation_gaps: list[dict[str, str]] = []
+    investigation_steps: list[dict[str, str]] = []
+    investigation_gap_note: str = ""
+
     def load_region(self):
         """Load whichever region is already selected. Used when the page opens."""
         yield from self._reload()
@@ -85,6 +101,7 @@ class WarRoomState(rx.State):
         """Switch edition and load that database only."""
         self.region_code = region_code
         self.selected_risk_id = ""
+        self._clear_investigation()
         yield from self._reload()
 
     def select_risk(self, risk_id: str):
@@ -108,6 +125,25 @@ class WarRoomState(rx.State):
 
     def mark_resolved(self):
         self._set_risk_status("resolved")
+
+    def investigate_selected(self):
+        """Draft a report for the risk already open in the register."""
+        if not self.selected_risk_id:
+            self.error_message = "Select a risk before investigating it."
+            return
+        self._investigate("risk", self.selected_risk_id)
+
+    def investigate_estimate(self, shipment_id: str):
+        """Draft a report for one scored shipment estimate."""
+        self._investigate("estimate", shipment_id)
+
+    def accept_report(self):
+        """Acknowledge the draft. This does not review or resolve a risk."""
+        self._decide_report("accepted")
+
+    def dismiss_report(self):
+        """Set the draft aside. Operational rows stay as they are."""
+        self._decide_report("dismissed")
 
     def _reload(self):
         # Yield once so the screen can show the loading line before SQLite work finishes.
@@ -305,6 +341,83 @@ class WarRoomState(rx.State):
         self.prediction_operational_note = snapshot.operational_note
         self.prediction_estimates = [_estimate_row(estimate) for estimate in snapshot.estimates]
 
+    def _investigate(self, kind: str, subject_id: str) -> None:
+        try:
+            repository = RegionRepository(self.region_code)
+            report = run_investigation(repository, kind, subject_id, now=_utc_now())
+        except Exception as exc:
+            self.error_message = f"The investigation was not drafted. {exc}"
+            return
+        self.error_message = ""
+        self._show_investigation(report)
+
+    def _decide_report(self, decision: str) -> None:
+        if self.investigation_status != "draft" or not self.investigation_id:
+            self.error_message = "Only a current draft can be accepted or dismissed."
+            return
+        try:
+            repository = RegionRepository(self.region_code)
+            if decision == "accepted":
+                report = accept_investigation(
+                    repository, self.investigation_id, now=_utc_now()
+                )
+            else:
+                report = dismiss_investigation(
+                    repository, self.investigation_id, now=_utc_now()
+                )
+            event = repository.latest_audit_event()
+        except StaleInvestigation as exc:
+            self.investigation_status = "stale"
+            self.error_message = str(exc)
+            return
+        except Exception as exc:
+            self.error_message = str(exc)
+            return
+        self.error_message = ""
+        self._show_investigation(report)
+        if event is not None:
+            self.audit_summary = event.summary
+            self.audit_at = event.occurred_at
+
+    def _show_investigation(self, report) -> None:
+        self.investigation_id = report.id
+        self.investigation_status = report.status
+        self.investigation_subject = f"{report.subject_kind} {report.subject_id}"
+        self.investigation_finding = report.finding
+        self.investigation_notice = "\n".join(report.notices)
+        self.investigation_claims = [
+            {
+                "citation_id": claim.citation_id,
+                "text": claim.text,
+                "evidence_kind": claim.evidence_kind,
+                "source": claim.source,
+                "field": claim.field,
+                "value": claim.value,
+                "record_id": claim.record_id,
+            }
+            for claim in report.claims
+        ]
+        self.investigation_gaps = [
+            {"code": gap.code, "text": gap.text} for gap in report.gaps
+        ]
+        self.investigation_steps = [{"text": step} for step in report.next_steps]
+        self.investigation_gap_note = (
+            ""
+            if report.gaps
+            else "No evidence gap was identified for this subject."
+        )
+
+    def _clear_investigation(self) -> None:
+        self.investigation_id = ""
+        self.investigation_status = ""
+        self.investigation_subject = ""
+        self.investigation_finding = ""
+        self.investigation_notice = ""
+        self.investigation_claims = []
+        self.investigation_gaps = []
+        self.investigation_steps = []
+        self.investigation_gap_note = ""
+
     def _clear_prediction(self) -> None:
         self.prediction_disclaimer = ""
         self.prediction_target = ""
@@ -356,6 +469,7 @@ class WarRoomState(rx.State):
         self.selected_risk_id = ""
         self._clear_risk_detail()
         self._clear_prediction()
+        self._clear_investigation()
 
 
 def _estimate_row(estimate) -> dict[str, str]:

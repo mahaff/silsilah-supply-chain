@@ -121,6 +121,17 @@ def _estimate_card(row: dict) -> rx.Component:
             ),
             rx.fragment(),
         ),
+        rx.cond(
+            row["probability"] != "",
+            rx.button(
+                "Investigate",
+                on_click=WarRoomState.investigate_estimate(row["shipment_id"]),
+                variant="outline",
+                cursor="pointer",
+                margin_top="3",
+            ),
+            rx.fragment(),
+        ),
         background_color=CARD,
         border=f"1px solid {LINE}",
         border_radius="12px",

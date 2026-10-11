@@ -4,6 +4,7 @@ Every operational query filters on the single supply chain id. MVP 1 has
 only one chain, and the filter is what will keep a second chain separate later.
 """
 
+import json
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -517,3 +518,198 @@ class RegionRepository:
                 (now, actor, action, evidence_kind, summary, risk_id, rule_id),
             )
             connection.commit()
+
+    def save_investigation_draft(
+        self,
+        *,
+        investigation_id: str,
+        subject_kind: str,
+        subject_id: str,
+        evidence_fingerprint: str,
+        report_json: str,
+        now: str,
+    ) -> dict[str, str]:
+        """Insert a draft once. A repeat of the same id returns the stored row.
+
+        This does not write an audit event and does not change operational rows.
+        """
+        self._refuse_other_region_subject(subject_id)
+        if subject_kind not in {"risk", "estimate"}:
+            raise ValueError("Subject kind must be risk or estimate.")
+        with self._session() as connection:
+            existing = connection.execute(
+                """
+                SELECT id, subject_kind, subject_id, status, evidence_fingerprint,
+                       report_json, created_at, updated_at, actor
+                FROM investigations
+                WHERE id = ?
+                """,
+                (investigation_id,),
+            ).fetchone()
+            if existing is not None:
+                return self._investigation_row(existing)
+            connection.execute(
+                """
+                INSERT INTO investigations (
+                    id, subject_kind, subject_id, status, evidence_fingerprint,
+                    report_json, created_at, updated_at, actor
+                ) VALUES (?, ?, ?, 'draft', ?, ?, ?, ?, 'system')
+                """,
+                (
+                    investigation_id,
+                    subject_kind,
+                    subject_id,
+                    evidence_fingerprint,
+                    report_json,
+                    now,
+                    now,
+                ),
+            )
+            connection.commit()
+            stored = connection.execute(
+                """
+                SELECT id, subject_kind, subject_id, status, evidence_fingerprint,
+                       report_json, created_at, updated_at, actor
+                FROM investigations
+                WHERE id = ?
+                """,
+                (investigation_id,),
+            ).fetchone()
+        if stored is None:
+            raise ValueError("The investigation draft was not stored.")
+        return self._investigation_row(stored)
+
+    def get_investigation(self, investigation_id: str) -> dict[str, str] | None:
+        with self._session() as connection:
+            row = connection.execute(
+                """
+                SELECT id, subject_kind, subject_id, status, evidence_fingerprint,
+                       report_json, created_at, updated_at, actor
+                FROM investigations
+                WHERE id = ?
+                """,
+                (investigation_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return self._investigation_row(row)
+
+    def list_investigation_ids(self) -> list[str]:
+        with self._session() as connection:
+            rows = connection.execute(
+                "SELECT id FROM investigations ORDER BY id"
+            ).fetchall()
+        return [row["id"] for row in rows]
+
+    def mark_investigation_stale(self, investigation_id: str, *, now: str) -> None:
+        """Mark a draft stale. This writes no audit event."""
+        with self._session() as connection:
+            row = connection.execute(
+                "SELECT status, report_json FROM investigations WHERE id = ?",
+                (investigation_id,),
+            ).fetchone()
+            if row is None or row["status"] != "draft":
+                return
+            payload = json.loads(row["report_json"])
+            payload["status"] = "stale"
+            payload["updated_at"] = now
+            connection.execute(
+                """
+                UPDATE investigations
+                SET status = 'stale', updated_at = ?, report_json = ?
+                WHERE id = ? AND status = 'draft'
+                """,
+                (
+                    now,
+                    json.dumps(payload, ensure_ascii=True, sort_keys=True),
+                    investigation_id,
+                ),
+            )
+            connection.commit()
+
+    def decide_investigation(
+        self,
+        *,
+        investigation_id: str,
+        decision: str,
+        evidence_fingerprint: str,
+        now: str,
+        summary: str,
+        risk_id: str | None,
+        rule_id: str | None,
+    ) -> None:
+        """Record one human decision and one audit row in the same transaction."""
+        if decision not in {"accepted", "dismissed"}:
+            raise ValueError("Decision must be accepted or dismissed.")
+        action = (
+            "investigation_accepted" if decision == "accepted" else "investigation_dismissed"
+        )
+        with self._session() as connection:
+            current = connection.execute(
+                "SELECT subject_id, report_json FROM investigations WHERE id = ?",
+                (investigation_id,),
+            ).fetchone()
+            if current is None:
+                raise ValueError("That investigation is not in this region's database.")
+            self._refuse_other_region_subject(current["subject_id"])
+            payload = json.loads(current["report_json"])
+            payload["status"] = decision
+            payload["updated_at"] = now
+            connection.execute(
+                """
+                UPDATE investigations
+                SET status = ?, updated_at = ?, report_json = ?
+                WHERE id = ? AND status = 'draft' AND evidence_fingerprint = ?
+                """,
+                (
+                    decision,
+                    now,
+                    json.dumps(payload, ensure_ascii=True, sort_keys=True),
+                    investigation_id,
+                    evidence_fingerprint,
+                ),
+            )
+            changed = connection.execute("SELECT changes()").fetchone()[0]
+            if changed != 1:
+                connection.rollback()
+                raise ValueError("This investigation cannot be decided.")
+            connection.execute(
+                """
+                INSERT INTO audit_events (
+                    occurred_at, actor, action, evidence_kind, summary, risk_id, rule_id
+                ) VALUES (?, 'local_user', ?, 'human_decision', ?, ?, ?)
+                """,
+                (now, action, summary, risk_id, rule_id),
+            )
+            connection.commit()
+
+    def _refuse_other_region_subject(self, subject_id: str) -> None:
+        """Reject a subject id from the other regional edition.
+
+        Kept here so this module does not import the investigation package.
+        """
+        code = self.config.region_code
+        if code == "ksa":
+            markers = ("pakistan:", "PAK-")
+            allowed = subject_id.startswith("ksa:") or subject_id.startswith("KSA-")
+        elif code == "pakistan":
+            markers = ("ksa:", "KSA-")
+            allowed = subject_id.startswith("pakistan:") or subject_id.startswith("PAK-")
+        else:
+            raise ValueError("Unknown region.")
+        if (not allowed) or any(marker in subject_id for marker in markers):
+            raise ValueError("This subject does not belong to the selected region.")
+
+    @staticmethod
+    def _investigation_row(row: sqlite3.Row) -> dict[str, str]:
+        return {
+            "id": row["id"],
+            "subject_kind": row["subject_kind"],
+            "subject_id": row["subject_id"],
+            "status": row["status"],
+            "evidence_fingerprint": row["evidence_fingerprint"],
+            "report_json": row["report_json"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+            "actor": row["actor"],
+        }

@@ -108,6 +108,20 @@ The page scores an operational shipment only when it is in transit and already h
 
 The three largest absolute contributions are shown as "increased the model estimate" or "decreased the model estimate". The wording does not say a supplier caused a delay.
 
+## Investigation (MVP 4)
+
+Investigation is a separate section under Predictive risk. It does not replace the risk register, and it does not score shipments.
+
+Choose Investigate on a risk, or on a scored estimate. Silsilah reads that subject's rows in one pass, in a fixed order, and drafts a report. The tools are read-only: the subject, linked records, the supplier indicator when the subject has a supplier, related deterministic rules, and prediction context only for a shipment risk or a scored estimate. Inventory and supplier subjects do not receive model history. A delayed shipment is not given a probability.
+
+Each sentence in the report is a fixed template filled from one retrieved field. The field's source, record, and value are the citation. A number or id has to belong to that field. If a sentence cannot be checked that way, the draft is rejected and nothing is stored. The finding is labeled an investigation summary. A database fact, a deterministic rule, and a model estimate stay in their own citations. On the Saudi estimate for KSA-SHP-002, the overdue rule and the probability are separate, and the report says the estimate does not confirm the rule.
+
+The chronological holdout stays visible inside a scored report. For this Saudi file that accuracy is below the majority-class baseline. The report says so, and it says this is not real-world forecasting performance.
+
+Accept acknowledges the report. Dismiss sets it aside. Neither one marks a risk reviewed or resolved, and neither one changes a shipment, purchase order, inventory row, or supplier. The review buttons in the register are unchanged. A decision writes one audit row in the selected region's database, with actor `local_user` and evidence kind human decision. Drafting writes no audit row. If the underlying rows change, the draft becomes stale and cannot be accepted or dismissed.
+
+No language model writes the report. `llm/null_provider.py` is unchanged. Nothing is sent outside the machine. Run `python -m persistence.seed` after this version so each regional file has an empty `investigations` table. An older database does not gain that table by itself.
+
 ## How the two regions stay separate
 
 - `regions/ksa/` and `regions/pakistan/` each have their own config and CSV files.
@@ -153,7 +167,7 @@ python -m pytest
 reflex run
 ```
 
-Stop `reflex run` before seeding again if Windows says the database file is locked. After this MVP, run `python -m persistence.seed` once so the risk tables, the dataset as-of date, and `shipment_history` exist. An older database file does not gain those tables by itself.
+Stop `reflex run` before seeding again if Windows says the database file is locked. After this MVP, run `python -m persistence.seed` once so the risk tables, the dataset as-of date, `shipment_history`, and the empty `investigations` table exist. An older database file does not gain those tables by itself.
 
 Then open [http://127.0.0.1:3217](http://127.0.0.1:3217).
 
@@ -178,6 +192,10 @@ If you skip the seed command, the first page load creates a missing database fro
 - Saudi Arabia and Pakistan models stay on their own history
 - a recorded delay is not given a probability
 - MVP 2 risk ids and the six metrics stay the same after history is loaded
+- an investigation claim has to match one retrieved field, including a number that appears only on a different claim
+- drafting writes no audit; accept and dismiss each write one, and neither changes operational rows
+- a stale draft cannot be accepted or dismissed
+- a subject or an evidence value from the other region is refused
 
 ## Project layout
 
@@ -186,18 +204,19 @@ app/                 Reflex pages and screen state
 domain/              Models, evidence labels, metric rules, and risk rules
 persistence/         Region config, SQLite schema, reads, and seeding
 prediction/          Synthetic late-arrival features, model, and explanations
+investigation/       One-pass read-only report and the human accept or dismiss step
 regions/ksa/         Saudi Arabia config, seed CSVs, governance notes
 regions/pakistan/    Pakistan config, seed CSVs, governance notes
 governance/          Status text for the panel
 llm/                 Provider interface and the null provider
-tests/               Isolation, seed, metric, risk, and prediction tests
+tests/               Isolation, seed, metric, risk, prediction, and investigation tests
 data/                Generated SQLite files (not committed)
 reflex.lock/         Frontend package list created by Reflex (kept)
 ```
 
 The first `reflex run` also creates a `.web/` folder. That folder is generated output and is gitignored.
 
-`agents/` and `simulation/` are still absent. Predictive risk lives in `prediction/` and does not add an agent.
+`agents/` and `simulation/` are still absent. Predictive risk lives in `prediction/`. Investigation is one fixed read of the selected region. It is not an autonomous loop.
 
 ## Decisions worth knowing
 
@@ -225,4 +244,4 @@ Plotly, LangGraph, a vector database, an xAI or other model SDK, Ollama, Postgre
 
 ## What this version will not do
 
-It will not place orders, send messages, approve an action, contact a supplier, recommend a purchase, simulate a recovery step, or describe a law. The late-arrival section is an estimate on synthetic history, not a real-world forecast, and it does not replace the risk register.
+It will not place orders, send messages, approve an action, contact a supplier, recommend a purchase, simulate a recovery step, or describe a law. The late-arrival section is an estimate on synthetic history, not a real-world forecast, and it does not replace the risk register. Accepting an investigation does not mark a risk reviewed or resolved and does not change shipments, orders, inventory, or suppliers.
