@@ -388,8 +388,8 @@ def test_history_does_not_change_mvp2_metrics_risks_or_audits(regional_databases
             regional_databases["ksa"],
             KSA_RISK_IDS,
             {
-                "suppliers": 4,
-                "products": 6,
+                "suppliers": 6,
+                "products": 10,
                 "open_purchase_orders": 3,
                 "shipments_in_transit": 1,
                 "delayed_shipments": 1,
@@ -401,8 +401,8 @@ def test_history_does_not_change_mvp2_metrics_risks_or_audits(regional_databases
             regional_databases["pakistan"],
             PAKISTAN_RISK_IDS,
             {
-                "suppliers": 4,
-                "products": 6,
+                "suppliers": 6,
+                "products": 10,
                 "open_purchase_orders": 2,
                 "shipments_in_transit": 0,
                 "delayed_shipments": 2,
@@ -439,7 +439,7 @@ def test_history_does_not_change_mvp2_metrics_risks_or_audits(regional_databases
         assert [event.id for event in repository.list_audit_events()] == [
             event.id for event in audits_before
         ]
-        assert len(repository.list_shipments(chain_id)) == 4
+        assert len(repository.list_shipments(chain_id)) == 6
         assert len(repository.list_shipment_history(chain_id)) == 48
         connection = sqlite3.connect(path)
         try:
@@ -450,7 +450,7 @@ def test_history_does_not_change_mvp2_metrics_risks_or_audits(regional_databases
             meta = dict(connection.execute("SELECT key, value FROM app_meta"))
         finally:
             connection.close()
-        assert shipment_count == 4
+        assert shipment_count == 6
         assert history_count == 48
         assert meta["shipment_history_role"] == "synthetic_ml_demonstration"
         assert meta["dataset_as_of"] == "2026-10-01"

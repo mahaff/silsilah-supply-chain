@@ -77,7 +77,7 @@ The risk register applies deterministic rules to known conditions. Predictive ri
 
 Each region has its own `shipment_history` table, loaded from `regions/<region>/seed/shipment_history.csv`. Those 48 completed trips are not inserted into `shipments`. Metrics, delayed-shipment counts, supplier indicators, risk ids, reviews, and audits ignore that table.
 
-The history is a demonstration set for checking the pipeline. Saudi Arabia trips depart from 2026-04-06. Pakistan trips depart from 2026-04-09. Both files end in early September 2026, on or before the dataset as-of date 2026-10-01. Late and on-time outcomes were assigned so that every supplier has both outcomes and the later trips still contain both outcomes. Lead time, city, and promised transit length are not a formula that produces the label.
+The history is a demonstration set for checking the pipeline. Saudi Arabia trips depart from 2026-04-06. Pakistan trips depart from 2026-04-09. Both files end in early September 2026, on or before the dataset as-of date 2026-10-01. Late and on-time outcomes were assigned so that each of the original four suppliers has both outcomes and the later trips still contain both outcomes. The pharmaceuticals supplier and the aerospace supplier in each file are operational rows only. They are not in those 48 trips. Lead time, city, and promised transit length are not a formula that produces the label.
 
 Each file has 48 trips, 23 of them late. A trip needs three earlier trips from the same supplier before it can be used. That excludes 12 trips. The scoring model is fit on the remaining 36 (17 late, 19 on time).
 
@@ -126,7 +126,7 @@ No language model writes the report. `llm/null_provider.py` is unchanged. Nothin
 
 Under the metric cards, the page draws the ports named in that region's file. Gulf ports and the Strait of Hormuz blink. A white ring means the city is on a supplier or shipment row. The bars are on-hand units by product category, and order quantity on a lane that names Dammam or Jubail.
 
-Families group those categories. Consumer covers beverages, staples, and household goods. Industry covers automotive, packaging, and electronics. Medicine and weapons are shown at zero: this synthetic file has no such rows, and the screen does not describe controlled goods. The drawing is not a live vessel feed and not a political assessment.
+Families group those categories. Consumer covers beverages, staples, and household goods. Industry covers automotive, packaging, and electronics. Pharmaceuticals is the supply-chain name for medicine: tablets and IV fluids, with on-hand stock in both regional files. Aerospace & Defense is the supply-chain name for defense materiel: fastener kits, radios, helmets, and filters. Those rows are synthetic finished goods and spares. The screen does not describe how controlled goods are made. The drawing is not a live vessel feed and not a political assessment.
 
 Hover a port, a bar, a family tile, a metric, or Investigate. The tooltip names what that control uses.
 
@@ -140,7 +140,7 @@ python -m persistence.seed
 reflex run
 ```
 
-Then open [http://127.0.0.1:3217](http://127.0.0.1:3217). Switch Saudi Arabia and Pakistan. Hover Dammam and the Strait of Hormuz. Confirm medicine and weapons stay at zero. Click Investigate on a risk, then Accept, and confirm the risk status is still Open.
+Then open [http://127.0.0.1:3217](http://127.0.0.1:3217). Switch Saudi Arabia and Pakistan. Hover Dammam and the Strait of Hormuz. Confirm Pharmaceuticals and Aerospace & Defense show on-hand units above zero. Saudi Arabia also shows Gulf-port order quantity for those two categories. Pakistan's Gulf-port bars stay at zero. Click Investigate on a risk, then Accept, and confirm the risk status is still Open.
 
 ## How the two regions stay separate
 

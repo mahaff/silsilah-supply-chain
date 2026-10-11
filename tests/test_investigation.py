@@ -216,8 +216,8 @@ def test_accept_and_dismiss_do_not_change_operations(regional_databases):
     pakistan = _repo(regional_databases, "pakistan")
     before = _operations(ksa)
     assert before["metrics"] == {
-        "suppliers": 4,
-        "products": 6,
+        "suppliers": 6,
+        "products": 10,
         "open_purchase_orders": 3,
         "shipments_in_transit": 1,
         "delayed_shipments": 1,
@@ -330,7 +330,7 @@ def test_seed_starts_with_an_empty_investigation_table(regional_databases):
     connection = sqlite3.connect(regional_databases["ksa"])
     try:
         assert connection.execute("SELECT COUNT(*) FROM investigations").fetchone()[0] == 0
-        assert connection.execute("SELECT COUNT(*) FROM shipments").fetchone()[0] == 4
+        assert connection.execute("SELECT COUNT(*) FROM shipments").fetchone()[0] == 6
         assert connection.execute("SELECT COUNT(*) FROM shipment_history").fetchone()[0] == 48
     finally:
         connection.close()

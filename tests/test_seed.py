@@ -28,7 +28,7 @@ def test_reseed_replaces_rows(regional_databases):
     repository = RegionRepository("ksa", database_path=path)
     scope = repository.load_scope()
     assert scope.organization.name == "Wadi Demo Distributors"
-    assert len(repository.list_suppliers(scope.supply_chain.id)) == 4
+    assert len(repository.list_suppliers(scope.supply_chain.id)) == 6
 
 
 def test_governance_status_makes_no_compliance_claim(regional_databases):
@@ -53,13 +53,13 @@ def _assert_shape(region_code, database_path, prefix, currency, organization_nam
     assert scope.organization.region_code.value == region_code
     assert scope.supply_chain.organization_id == scope.organization.id
     assert chain_id.startswith(prefix)
-    assert len(repository.list_suppliers(chain_id)) == 4
-    assert len(repository.list_products(chain_id)) == 6
+    assert len(repository.list_suppliers(chain_id)) == 6
+    assert len(repository.list_products(chain_id)) == 10
     assert len(repository.list_warehouses(chain_id)) == 2
-    assert len(repository.list_inventory(chain_id)) == 8
-    assert len(repository.list_purchase_orders(chain_id)) == 5
-    assert len(repository.list_purchase_order_lines(chain_id)) == 7
-    assert len(repository.list_shipments(chain_id)) == 4
+    assert len(repository.list_inventory(chain_id)) == 12
+    assert len(repository.list_purchase_orders(chain_id)) == 7
+    assert len(repository.list_purchase_order_lines(chain_id)) == 11
+    assert len(repository.list_shipments(chain_id)) == 6
     assert repository.governance_reference_count() == 0
 
     audit = repository.latest_audit_event()

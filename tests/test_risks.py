@@ -271,7 +271,7 @@ def test_seeded_regions_match_the_published_rules(regional_databases):
         "Insufficient evidence" in item.delay_proportion_text for item in pakistan_indicators
     )
     oasis = next(item for item in ksa_indicators if item.supplier_id == "KSA-SUP-001")
-    assert oasis.order_share_text == "2 of 5 purchase orders in this supply chain."
+    assert oasis.order_share_text == "2 of 7 purchase orders in this supply chain."
     assert all(risk.rule_id != "supplier.order_share" for risk in ksa_risks + pakistan_risks)
     assert ksa.governance_reference_count() == 0
 

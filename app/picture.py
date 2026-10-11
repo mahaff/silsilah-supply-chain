@@ -16,14 +16,25 @@ FAMILY_BY_CATEGORY = {
     "Automotive": "Industry",
     "Packaging": "Industry",
     "Electronics": "Industry",
+    "Pharmaceuticals": "Pharmaceuticals",
+    "Aerospace & Defense": "Aerospace & Defense",
 }
 
 FAMILY_NOTES = {
     "Consumer": "Beverages, staples, and household goods in this synthetic file.",
     "Industry": "Automotive, packaging, and electronics rows in this synthetic file.",
-    "Medicine": "No medicine row is in this synthetic file.",
-    "Weapons": "No weapons row is in this synthetic file. This screen does not describe controlled goods.",
+    "Pharmaceuticals": (
+        "Pharmaceuticals is the supply-chain name for medicine. "
+        "On-hand units are tablets and IV fluids in this synthetic file."
+    ),
+    "Aerospace & Defense": (
+        "Aerospace & Defense is the supply-chain name for defense materiel. "
+        "On-hand units are synthetic spares and equipment. "
+        "This screen does not describe how controlled goods are made."
+    ),
 }
+
+FAMILY_ORDER = ("Consumer", "Industry", "Pharmaceuticals", "Aerospace & Defense")
 
 # Positions are percentages on the drawn map, not a navigation chart.
 PORTS = (
@@ -134,7 +145,7 @@ def _category_rows(on_hand: dict[str, int], gulf_qty: dict[str, int]) -> list[di
 
 
 def _family_rows(on_hand: dict[str, int]) -> list[dict[str, str]]:
-    totals = {"Consumer": 0, "Industry": 0, "Medicine": 0, "Weapons": 0}
+    totals = {name: 0 for name in FAMILY_ORDER}
     for category, quantity in on_hand.items():
         family = FAMILY_BY_CATEGORY.get(category)
         if family is None:
@@ -148,7 +159,7 @@ def _family_rows(on_hand: dict[str, int]) -> list[dict[str, str]]:
             "width": _width(totals[name], peak),
             "note": FAMILY_NOTES[name],
         }
-        for name in ("Consumer", "Industry", "Medicine", "Weapons")
+        for name in FAMILY_ORDER
     ]
 
 

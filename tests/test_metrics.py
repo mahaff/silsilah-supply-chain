@@ -16,8 +16,8 @@ from llm.null_provider import get_provider
 from persistence.repository import RegionRepository
 
 KSA_EXPECTED = {
-    "suppliers": 4,
-    "products": 6,
+    "suppliers": 6,
+    "products": 10,
     "open_purchase_orders": 3,
     "shipments_in_transit": 1,
     "delayed_shipments": 1,
@@ -25,8 +25,8 @@ KSA_EXPECTED = {
 }
 
 PAKISTAN_EXPECTED = {
-    "suppliers": 4,
-    "products": 6,
+    "suppliers": 6,
+    "products": 10,
     "open_purchase_orders": 2,
     "shipments_in_transit": 0,
     "delayed_shipments": 2,

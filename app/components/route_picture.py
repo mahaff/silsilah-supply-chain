@@ -152,7 +152,14 @@ def _gulf_bar(row: dict) -> rx.Component:
 def _bar(row: dict, value, width, color: str) -> rx.Component:
     return tip(
         rx.hstack(
-            rx.text(row["name"], width="110px", font_size="13px", color=INK, font_family=SANS),
+            rx.text(
+                row["name"],
+                width="168px",
+                font_size="13px",
+                color=INK,
+                font_family=SANS,
+                flex_shrink="0",
+            ),
             rx.box(
                 rx.box(
                     width=width,
